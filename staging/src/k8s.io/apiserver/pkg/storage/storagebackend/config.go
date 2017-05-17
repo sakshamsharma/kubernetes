@@ -19,6 +19,7 @@ package storagebackend
 import (
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/storage/value"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/toy"
 )
 
 const (
@@ -26,6 +27,8 @@ const (
 	StorageTypeETCD2 = "etcd2"
 	StorageTypeETCD3 = "etcd3"
 )
+
+var DefaultTransformer = toy.ToyTransformer
 
 // Config is configuration for creating a storage backend.
 type Config struct {
@@ -58,7 +61,8 @@ func NewDefaultConfig(prefix string, copier runtime.ObjectCopier, codec runtime.
 		// Default cache size to 0 - if unset, its size will be set based on target
 		// memory usage.
 		DeserializationCacheSize: 0,
-		Copier: copier,
-		Codec:  codec,
+		Copier:      copier,
+		Codec:       codec,
+		Transformer: DefaultTransformer,
 	}
 }

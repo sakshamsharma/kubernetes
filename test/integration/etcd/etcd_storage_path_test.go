@@ -58,6 +58,8 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/pkg/transport"
+
+	"k8s.io/apiserver/pkg/storage/value"
 )
 
 // Etcd data for all persisted objects.
@@ -871,7 +873,13 @@ func getFromEtcd(keys clientv3.KV, path string) (*metaObject, error) {
 	if response.More || response.Count != 1 || len(response.Kvs) != 1 {
 		return nil, fmt.Errorf("Invalid etcd response (not found == %v): %#v", response.Count == 0, response)
 	}
-	return jsonToMetaObject(response.Kvs[0].Value)
+
+	transformed, _, err := storagebackend.DefaultTransformer.TransformFromStorage(response.Kvs[0].Value, value.DefaultContext{})
+	if err != nil {
+		return nil, err
+	}
+
+	return jsonToMetaObject(transformed)
 }
 
 func diffMaps(a, b interface{}) ([]string, []string) {
