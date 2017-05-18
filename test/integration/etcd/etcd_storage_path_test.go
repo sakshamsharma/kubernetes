@@ -58,7 +58,6 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/pkg/transport"
-
 	"k8s.io/apiserver/pkg/storage/value"
 )
 
@@ -874,7 +873,9 @@ func getFromEtcd(keys clientv3.KV, path string) (*metaObject, error) {
 		return nil, fmt.Errorf("Invalid etcd response (not found == %v): %#v", response.Count == 0, response)
 	}
 
-	transformed, _, err := storagebackend.DefaultTransformer.TransformFromStorage(response.Kvs[0].Value, value.DefaultContext{})
+	transformed, _, err := storagebackend.DefaultTransformer.TransformFromStorage(response.Kvs[0].Value,
+		value.DefaultContext{})
+
 	if err != nil {
 		return nil, err
 	}
