@@ -58,7 +58,6 @@ import (
 
 	"github.com/coreos/etcd/clientv3"
 	"github.com/coreos/etcd/pkg/transport"
-	"k8s.io/apiserver/pkg/storage/value"
 )
 
 // Etcd data for all persisted objects.
@@ -864,6 +863,21 @@ func createSerializers(config restclient.ContentConfig) (*restclient.Serializers
 	return s, nil
 }
 
+// COPIED from store.go
+// authenticatedDataString satisfies the value.Context interface. It uses the key to
+// authenticate the stored data. This does not defend against reuse of previously
+// encrypted values under the same key, but will prevent an attacker from using an
+// encrypted value from a different key. A stronger authenticated data segment would
+// include the etcd3 Version field (which is incremented on each write to a key and
+// reset when the key is deleted), but an attacker with write access to etcd can
+// force deletion and recreation of keys to weaken that angle.
+type authenticatedDataString string
+
+// AuthenticatedData implements the value.Context interface.
+func (d authenticatedDataString) AuthenticatedData() []byte {
+	return []byte(string(d))
+}
+
 func getFromEtcd(keys clientv3.KV, path string) (*metaObject, error) {
 	response, err := keys.Get(context.Background(), path)
 	if err != nil {
@@ -874,7 +888,7 @@ func getFromEtcd(keys clientv3.KV, path string) (*metaObject, error) {
 	}
 
 	transformed, _, err := storagebackend.DefaultTransformer.TransformFromStorage(response.Kvs[0].Value,
-		value.DefaultContext{})
+		authenticatedDataString(response.Kvs[0].Key))
 
 	if err != nil {
 		return nil, err

@@ -17,13 +17,13 @@ limitations under the License.
 package storagebackend
 
 import (
-	//rawaes "crypto/aes"
-	//"crypto/cipher"
+	rawaes "crypto/aes"
+	"crypto/cipher"
 
 	"k8s.io/apimachinery/pkg/runtime"
 	"k8s.io/apiserver/pkg/storage/value"
-	//"k8s.io/apiserver/pkg/storage/value/encrypt/aes"
-	"k8s.io/apiserver/pkg/storage/value/encrypt/toy"
+
+	"k8s.io/apiserver/pkg/storage/value/encrypt/aes"
 )
 
 const (
@@ -32,18 +32,18 @@ const (
 	StorageTypeETCD3 = "etcd3"
 )
 
-//func getAesBlock() cipher.Block {
-//key := []byte("lord_of_the_keys")
+func getAesBlock() cipher.Block {
+	key := []byte("lord_of_the_keys")
 
-//block, err := rawaes.NewCipher(key)
-//if err != nil {
-//panic(err.Error())
-//}
-//return block
-//}
+	block, err := rawaes.NewCipher(key)
+	if err != nil {
+		panic(err.Error())
+	}
+	return block
+}
 
-//var DefaultTransformer = aes.NewGCMTransformer(getAesBlock())
-var DefaultTransformer = toy.ToyTransformer
+// var DefaultTransformer = toy.ToyTransformer
+var DefaultTransformer = aes.NewGCMTransformer(getAesBlock())
 
 // Config is configuration for creating a storage backend.
 type Config struct {
