@@ -871,7 +871,16 @@ func getFromEtcd(keys clientv3.KV, path string) (*metaObject, error) {
 	if response.More || response.Count != 1 || len(response.Kvs) != 1 {
 		return nil, fmt.Errorf("Invalid etcd response (not found == %v): %#v", response.Count == 0, response)
 	}
-	return jsonToMetaObject(response.Kvs[0].Value)
+
+	// The write would have taken place using the DefaultTransformer. Need to modify the read accordingly.
+	transformed, _, err := storagebackend.DefaultTransformer.TransformFromStorage(response.Kvs[0].Value,
+		storagebackend.DefaultContext([]byte(response.Kvs[0].Key)))
+
+	if err != nil {
+		return nil, err
+	}
+
+	return jsonToMetaObject(transformed)
 }
 
 func diffMaps(a, b interface{}) ([]string, []string) {

@@ -33,6 +33,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/watch"
+	"k8s.io/apiserver/pkg/storage/storagebackend"
 	"k8s.io/client-go/dynamic"
 	apiextensionsv1alpha1 "k8s.io/kube-apiextensions-server/pkg/apis/apiextensions/v1alpha1"
 	extensionsapiserver "k8s.io/kube-apiextensions-server/pkg/apiserver"
@@ -473,8 +474,17 @@ func getFromEtcd(keys clientv3.KV, prefix, localPath string) (*metaObject, error
 	if response.More || response.Count != 1 || len(response.Kvs) != 1 {
 		return nil, fmt.Errorf("Invalid etcd response (not found == %v): %#v", response.Count == 0, response)
 	}
+
+	// The write would have taken place using the DefaultTransformer. Need to modify the read accordingly.
+	transformed, _, err := storagebackend.DefaultTransformer.TransformFromStorage(response.Kvs[0].Value,
+		storagecontext.DefaultContext([]byte(response.Kvs[0].Key)))
+
+	if err != nil {
+		return nil, err
+	}
+
 	obj := &metaObject{}
-	if err := json.Unmarshal(response.Kvs[0].Value, obj); err != nil {
+	if err := json.Unmarshal(transformed, obj); err != nil {
 		return nil, err
 	}
 	return obj, nil

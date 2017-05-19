@@ -27,6 +27,14 @@ const (
 	StorageTypeETCD3 = "etcd3"
 )
 
+var DefaultTransformer value.Transformer = value.IdentityTransformer
+
+// DefaultContext is a simple implementation of Context for a slice of bytes.
+type DefaultContext []byte
+
+// AuthenticatedData returns itself.
+func (c DefaultContext) AuthenticatedData() []byte { return []byte(c) }
+
 // Config is configuration for creating a storage backend.
 type Config struct {
 	// Type defines the type of storage backend, e.g. "etcd2", etcd3". Default ("") is "etcd3".
@@ -58,7 +66,8 @@ func NewDefaultConfig(prefix string, copier runtime.ObjectCopier, codec runtime.
 		// Default cache size to 0 - if unset, its size will be set based on target
 		// memory usage.
 		DeserializationCacheSize: 0,
-		Copier: copier,
-		Codec:  codec,
+		Copier:      copier,
+		Codec:       codec,
+		Transformer: DefaultTransformer,
 	}
 }

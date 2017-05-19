@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"testing"
 
+	"k8s.io/apiserver/pkg/storage/storagebackend"
 	"k8s.io/apiserver/pkg/storage/value"
 )
 
@@ -52,7 +53,7 @@ func TestGCMKeyRotation(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	context := value.DefaultContext([]byte("authenticated_data"))
+	context := storagebackend.DefaultContext([]byte("authenticated_data"))
 
 	p := value.NewPrefixTransformers(testErr,
 		value.PrefixTransformer{Prefix: []byte("first:"), Transformer: NewGCMTransformer(block1)},
@@ -74,7 +75,7 @@ func TestGCMKeyRotation(t *testing.T) {
 	}
 
 	// verify changing the context fails storage
-	from, stale, err = p.TransformFromStorage(out, value.DefaultContext([]byte("incorrect_context")))
+	from, stale, err = p.TransformFromStorage(out, storagebackend.DefaultContext([]byte("incorrect_context")))
 	if err == nil {
 		t.Fatalf("expected unauthenticated data")
 	}
@@ -116,7 +117,7 @@ func benchmarkGCMRead(b *testing.B, keyLength int, valueLength int, stale bool) 
 		value.PrefixTransformer{Prefix: []byte("second:"), Transformer: NewGCMTransformer(block2)},
 	)
 
-	context := value.DefaultContext([]byte("authenticated_data"))
+	context := storagebackend.DefaultContext([]byte("authenticated_data"))
 	v := bytes.Repeat([]byte("0123456789abcdef"), valueLength/16)
 
 	out, err := p.TransformToStorage(v, context)
@@ -158,7 +159,7 @@ func benchmarkGCMWrite(b *testing.B, keyLength int, valueLength int) {
 		value.PrefixTransformer{Prefix: []byte("second:"), Transformer: NewGCMTransformer(block2)},
 	)
 
-	context := value.DefaultContext([]byte("authenticated_data"))
+	context := storagebackend.DefaultContext([]byte("authenticated_data"))
 	v := bytes.Repeat([]byte("0123456789abcdef"), valueLength/16)
 
 	b.ResetTimer()

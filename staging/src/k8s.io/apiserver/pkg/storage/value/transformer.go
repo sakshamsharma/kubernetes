@@ -55,12 +55,6 @@ func (identityTransformer) TransformToStorage(b []byte, ctx Context) ([]byte, er
 	return b, nil
 }
 
-// DefaultContext is a simple implementation of Context for a slice of bytes.
-type DefaultContext []byte
-
-// AuthenticatedData returns itself.
-func (c DefaultContext) AuthenticatedData() []byte { return []byte(c) }
-
 // MutableTransformer allows a transformer to be changed safely at runtime.
 type MutableTransformer struct {
 	lock        sync.RWMutex
