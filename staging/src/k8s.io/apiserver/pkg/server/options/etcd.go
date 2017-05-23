@@ -109,6 +109,9 @@ func (s *EtcdOptions) AddFlags(fs *pflag.FlagSet) {
 
 	fs.BoolVar(&s.StorageConfig.Quorum, "etcd-quorum-read", s.StorageConfig.Quorum,
 		"If true, enable quorum read.")
+
+	fs.Var(EncryptionProviderConfig{Transf: &s.StorageConfig.Transformer}, "encryption-provider-config",
+		"The file containing configuration for the encryption provider to be used for storing secrets in etcd")
 }
 
 func (s *EtcdOptions) ApplyTo(c *server.Config) error {
