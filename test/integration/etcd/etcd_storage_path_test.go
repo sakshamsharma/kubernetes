@@ -40,6 +40,7 @@ import (
 	"k8s.io/apimachinery/pkg/util/sets"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
+	"k8s.io/apiserver/pkg/storage/value"
 	kclient "k8s.io/client-go/kubernetes"
 	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -394,11 +395,24 @@ const testNamespace = "etcdstoragepathtestnamespace"
 // It will start failing when a new type is added to ensure that all future types are added to this test.
 // It will also fail when a type gets moved to a different location. Be very careful in this situation because
 // it essentially means that you will be break old clusters unless you create some migration path for the old data.
+// The above tests will be run once for each available transformer.
 func TestEtcdStoragePath(t *testing.T) {
+
+	transformers := []value.Transformer{
+		value.IdentityTransformer,
+	}
+
+	for _, transf := range transformers {
+		testEtcdWithTransformer(t, transf)
+	}
+}
+
+// Run once for each transformer
+func testEtcdWithTransformer(t *testing.T, transf value.Transformer) {
 	certDir, _ := ioutil.TempDir("", "test-integration-etcd")
 	defer os.RemoveAll(certDir)
 
-	client, kvClient, mapper := startRealMasterOrDie(t, certDir)
+	client, kvClient, mapper := startRealMasterOrDie(t, certDir, transf)
 	defer func() {
 		dumpEtcdKVOnFailure(t, kvClient)
 	}()
@@ -487,7 +501,8 @@ func TestEtcdStoragePath(t *testing.T) {
 				}
 			}
 
-			output, err := getFromEtcd(kvClient, testData.expectedEtcdPath)
+			// getFromEtcd reads raw response from etcd (using the etcd library)
+			output, err := getFromEtcd(kvClient, testData.expectedEtcdPath, transf)
 			if err != nil {
 				t.Errorf("failed to get from etcd for %s from %s: %#v", kind, pkgPath, err)
 				return
@@ -525,7 +540,7 @@ func TestEtcdStoragePath(t *testing.T) {
 	}
 }
 
-func startRealMasterOrDie(t *testing.T, certDir string) (*allClient, clientv3.KV, meta.RESTMapper) {
+func startRealMasterOrDie(t *testing.T, certDir string, transf value.Transformer) (*allClient, clientv3.KV, meta.RESTMapper) {
 	_, defaultServiceClusterIPRange, err := net.ParseCIDR("10.0.0.0/24")
 	if err != nil {
 		t.Fatal(err)
@@ -540,6 +555,7 @@ func startRealMasterOrDie(t *testing.T, certDir string) (*allClient, clientv3.KV
 			kubeAPIServerOptions.SecureServing.BindAddress = net.ParseIP("127.0.0.1")
 			kubeAPIServerOptions.SecureServing.ServerCert.CertDirectory = certDir
 			kubeAPIServerOptions.Etcd.StorageConfig.ServerList = []string{framework.GetEtcdURLFromEnv()}
+			kubeAPIServerOptions.Etcd.StorageConfig.Transformer = transf
 			kubeAPIServerOptions.Etcd.DefaultStorageMediaType = runtime.ContentTypeJSON // TODO use protobuf?
 			kubeAPIServerOptions.ServiceClusterIPRange = *defaultServiceClusterIPRange
 			kubeAPIServerOptions.Authorization.Mode = "RBAC"
@@ -863,7 +879,7 @@ func createSerializers(config restclient.ContentConfig) (*restclient.Serializers
 	return s, nil
 }
 
-func getFromEtcd(keys clientv3.KV, path string) (*metaObject, error) {
+func getFromEtcd(keys clientv3.KV, path string, transf value.Transformer) (*metaObject, error) {
 	response, err := keys.Get(context.Background(), path)
 	if err != nil {
 		return nil, err
@@ -872,8 +888,8 @@ func getFromEtcd(keys clientv3.KV, path string) (*metaObject, error) {
 		return nil, fmt.Errorf("Invalid etcd response (not found == %v): %#v", response.Count == 0, response)
 	}
 
-	// The write would have taken place using the DefaultTransformer. Need to modify the read accordingly.
-	transformed, _, err := storagebackend.DefaultTransformer.TransformFromStorage(response.Kvs[0].Value,
+	// The key of the item in etcd is hardcoded as the context for transformer
+	transformed, _, err := transf.TransformFromStorage(response.Kvs[0].Value,
 		storagebackend.DefaultContext([]byte(response.Kvs[0].Key)))
 
 	if err != nil {

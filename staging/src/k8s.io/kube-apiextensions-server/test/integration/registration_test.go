@@ -477,7 +477,7 @@ func getFromEtcd(keys clientv3.KV, prefix, localPath string) (*metaObject, error
 
 	// The write would have taken place using the DefaultTransformer. Need to modify the read accordingly.
 	transformed, _, err := storagebackend.DefaultTransformer.TransformFromStorage(response.Kvs[0].Value,
-		storagecontext.DefaultContext([]byte(response.Kvs[0].Key)))
+		storagebackend.DefaultContext([]byte(response.Kvs[0].Key)))
 
 	if err != nil {
 		return nil, err
