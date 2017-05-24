@@ -1,0 +1,9 @@
+- kind: AEAD
+  version: v1
+  keys:
+    - newkey
+  resources: v1/Secrets
+- kind: KMS
+  resources: v2/Secrets
+  keyring: ac
+  keyid: key

@@ -509,6 +509,7 @@ function start_apiserver {
       --requestheader-allowed-names=system:auth-proxy \
       --proxy-client-cert-file="${CERT_DIR}/client-auth-proxy.crt" \
       --proxy-client-key-file="${CERT_DIR}/client-auth-proxy.key" \
+      --encryption-provider-config=config.yaml \
       --cors-allowed-origins="${API_CORS_ALLOWED_ORIGINS}" >"${APISERVER_LOG}" 2>&1 &
     APISERVER_PID=$!
 
