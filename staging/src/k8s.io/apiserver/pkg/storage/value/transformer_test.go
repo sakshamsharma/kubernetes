@@ -41,7 +41,7 @@ func (t *testTransformer) TransformToStorage(to []byte, context Context) (data [
 
 func TestPrefixFrom(t *testing.T) {
 	testErr := fmt.Errorf("test error")
-	transformErr := fmt.Errorf("test error")
+	transformErr := fmt.Errorf("transform error")
 	transformers := []PrefixTransformer{
 		{Prefix: []byte("first:"), Transformer: &testTransformer{from: []byte("value1")}},
 		{Prefix: []byte("second:"), Transformer: &testTransformer{from: []byte("value2")}},
@@ -77,7 +77,7 @@ func TestPrefixFrom(t *testing.T) {
 
 func TestPrefixTo(t *testing.T) {
 	testErr := fmt.Errorf("test error")
-	transformErr := fmt.Errorf("test error")
+	transformErr := fmt.Errorf("transform error")
 	testCases := []struct {
 		transformers []PrefixTransformer
 		expect       []byte
@@ -96,6 +96,74 @@ func TestPrefixTo(t *testing.T) {
 		}
 		if !bytes.Equal([]byte("value"), test.transformers[0].Transformer.(*testTransformer).receivedTo) {
 			t.Errorf("%d: unexpected value received by transformer: %s", i, test.transformers[0].Transformer.(*testTransformer).receivedTo)
+		}
+	}
+}
+
+func TestLocationFrom(t *testing.T) {
+	testErr := fmt.Errorf("test error")
+	transformErr := fmt.Errorf("transform error")
+	transformers := []LocationTransformer{
+		{Location: "/first/", Transformer: &testTransformer{from: []byte("value0")}},
+		{Location: "/first/second/", Transformer: &testTransformer{err: transformErr}},
+		{Location: "/first/second/", Transformer: &testTransformer{from: []byte("value2")}},
+		{Location: "/first/second/third/", Transformer: &testTransformer{from: []byte("value3")}},
+	}
+	p := NewLocationTransformers(testErr, transformers...)
+
+	testCases := []struct {
+		location string
+		expect   []byte
+		stale    bool
+		err      error
+		match    int
+	}{
+		{"/first/fourth/", []byte("value0"), false, nil, 0},
+		{"/first/second/", []byte("value2"), false, nil, 2},
+		{"/first/second/third/", []byte("value3"), false, nil, 3},
+		{"/fifth/", nil, false, transformErr, -1},
+	}
+	for i, test := range testCases {
+		got, stale, err := p.TransformFromStorage([]byte("value"), DefaultContext(test.location))
+		if stale != test.stale || !bytes.Equal(got, test.expect) {
+			t.Errorf("%d: unexpected out: %q %t %#v", i, string(got), stale, err)
+			continue
+		}
+		if test.match != -1 && !bytes.Equal([]byte("value"), transformers[test.match].Transformer.(*testTransformer).receivedFrom) {
+			t.Errorf("%d: unexpected value received by transformer: %s", i, transformers[test.match].Transformer.(*testTransformer).receivedFrom)
+		}
+	}
+}
+
+func TestLocationTo(t *testing.T) {
+	testErr := fmt.Errorf("test error")
+	transformErr := fmt.Errorf("transform error")
+	transformers := []LocationTransformer{
+		{Location: "/first/", Transformer: &testTransformer{to: []byte("value0")}},
+		{Location: "/first/second/", Transformer: &testTransformer{to: []byte("value1")}},
+		{Location: "/first/second/", Transformer: &testTransformer{to: []byte("value2")}},
+		{Location: "/first/second/third/", Transformer: &testTransformer{to: []byte("value3")}},
+		{Location: "/sixth/", Transformer: &testTransformer{err: transformErr}},
+	}
+	testCases := []struct {
+		location string
+		expect   []byte
+		err      error
+	}{
+		{"/first", []byte("value0"), nil},
+		{"/first/second/fifth/", []byte("value1"), nil},
+		{"/first/second/third/fourth/", []byte("value3"), nil},
+		{"/sixth/seventh", nil, transformErr},
+	}
+	for i, test := range testCases {
+		p := NewLocationTransformers(testErr, transformers...)
+		got, err := p.TransformToStorage([]byte("value"), DefaultContext(test.location))
+		if err != test.err || !bytes.Equal(got, test.expect) {
+			t.Errorf("%d: unexpected out: %q %#v", i, string(got), err)
+			continue
+		}
+		if !bytes.Equal([]byte("value"), transformers[0].Transformer.(*testTransformer).receivedTo) {
+			t.Errorf("%d: unexpected value received by transformer: %s", i, transformers[0].Transformer.(*testTransformer).receivedTo)
 		}
 	}
 }
