@@ -102,9 +102,9 @@ func NewGCMTransformerFromConfig(config map[string]interface{}) (value.Transform
 			Prefix:      []byte("k8s-aes-gcm-v1:"),
 		}), nil
 
-	} else {
-		return nil, fmt.Errorf("no valid keys found in configuration for AEAD transformer")
 	}
+
+	return nil, fmt.Errorf("no valid keys found in configuration for k8s-aes-gcm-v1 transformer")
 }
 
 func (t *gcm) TransformFromStorage(data []byte, context value.Context) ([]byte, bool, error) {
