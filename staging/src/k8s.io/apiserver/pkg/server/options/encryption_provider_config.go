@@ -52,7 +52,7 @@ func (e EncryptionProviderConfig) Set(filepath string) error {
 		if err != nil {
 			return err
 		}
-		if providerConfig.Kind == "AEAD" {
+		if providerConfig.Kind == "k8s-aes-gcm" {
 			aead, err := aestransformer.NewGCMTransformerFromConfig(provider)
 			if err != nil {
 				return err
@@ -80,6 +80,7 @@ func (e EncryptionProviderConfig) Type() string {
 // Stores information common to all encryption providers
 type providerInfo struct {
 	Kind     string
+	Version  string
 	Resource string
 }
 
@@ -98,6 +99,11 @@ func parseProviderInfo(config map[string]interface{}) (providerInfo, error) {
 		result.Resource = resource
 	} else {
 		return result, fmt.Errorf("ignoring encryption provider \"%s\" without a valid \"resource\" key specified in configuration", result.Kind)
+	}
+
+	// Version can be skipped
+	if version, ok := config["version"]; ok {
+		result.Version = "-" + fmt.Sprintf("%v", version)
 	}
 
 	return result, nil

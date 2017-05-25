@@ -26,7 +26,7 @@ import (
 )
 
 var correctConfig string = `
-- kind: AEAD
+- kind: k8s-aes-gcm
   version: v1
   keys:
     - name: key1
@@ -34,7 +34,7 @@ var correctConfig string = `
     - name: key2
       secret: dGhpcyBpcyBwYXNzd29yZA==
   resource: /registry/namespaces
-- kind: AEAD
+- kind: k8s-aes-gcm
   version: v1
   keys:
     - name: key2
@@ -45,7 +45,7 @@ var correctConfig string = `
 `
 
 var incorrectConfig1 string = `
-- kind: AEAD
+- kind: k8s-aes-gcm
   version: v1
   keys:
     - name: key1
@@ -55,7 +55,7 @@ var incorrectConfig1 string = `
 `
 
 var incorrectConfig2 string = `
-- kind: AEAD
+- kind: k8s-aes-gcm
   version: v1
   keys:
     - name: key2
@@ -63,7 +63,7 @@ var incorrectConfig2 string = `
 `
 
 var incorrectConfig3 string = `
-- kind: AEAD
+- kind: k8s-aes-gcm
   version: v1
   keys:
     - name: key1

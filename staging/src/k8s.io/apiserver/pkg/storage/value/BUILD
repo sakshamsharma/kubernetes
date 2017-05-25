@@ -17,6 +17,10 @@ go_test(
 
 go_library(
     name = "go_default_library",
-    srcs = ["transformer.go"],
+    srcs = [
+        "helpers.go",
+        "location_transformer.go",
+        "transformer.go",
+    ],
     tags = ["automanaged"],
 )

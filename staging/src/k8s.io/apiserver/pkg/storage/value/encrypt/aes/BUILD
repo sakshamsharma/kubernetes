@@ -20,8 +20,5 @@ go_library(
     name = "go_default_library",
     srcs = ["aes.go"],
     tags = ["automanaged"],
-    deps = [
-        "//vendor/github.com/golang/glog:go_default_library",
-        "//vendor/k8s.io/apiserver/pkg/storage/value:go_default_library",
-    ],
+    deps = ["//vendor/k8s.io/apiserver/pkg/storage/value:go_default_library"],
 )
