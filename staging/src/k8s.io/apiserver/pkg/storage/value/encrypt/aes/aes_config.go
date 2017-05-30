@@ -78,7 +78,7 @@ func (config Config) GetPrefixTransformer() (value.PrefixTransformer, error) {
 	// Create a PrefixTransformer which shall later be put in a list with other providers
 	result = value.PrefixTransformer{
 		Transformer: keyTransformer,
-		Prefix:      []byte("k8s-aes-v1:"),
+		Prefix:      []byte("enc-k8s-aes-v1:"),
 	}
 
 	return result, nil
