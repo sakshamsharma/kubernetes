@@ -18,7 +18,9 @@ package options
 
 import (
 	"fmt"
+	"io"
 	"io/ioutil"
+	"os"
 	"strings"
 
 	yaml "github.com/ghodss/yaml"
@@ -30,18 +32,40 @@ import (
 
 // Used for parsing command line parameters for selecting transformer
 type EncryptionProviderConfig struct {
-	TransformerMap *map[schema.GroupResource]value.Transformer
-	name           string
+	TransformerOverrides *map[schema.GroupResource]value.Transformer
 }
 
 func (e EncryptionProviderConfig) Set(filepath string) error {
-	data, err := ioutil.ReadFile(filepath)
+	f, err := os.Open(filepath)
 	if err != nil {
-		return fmt.Errorf("could not read encryption provider config from %q: %v", filepath, err)
+		return fmt.Errorf("error opening encryption provider configuration file %q: %v", filepath, err)
+	}
+	defer f.Close()
+
+	if err := ConfigToTransformerOverrides(f, e.TransformerOverrides); err != nil {
+		return fmt.Errorf("error parsing encryption provider configuration file %q: %v", filepath, err)
+	}
+	return nil
+}
+
+func (e EncryptionProviderConfig) String() string {
+	return ""
+}
+
+func (e EncryptionProviderConfig) Type() string {
+	return "experimental-encryption-provider-config"
+}
+
+// ConfigToTransformerOverrides consumes an io.Reader containing a configuration file, and stores
+// the parsed encryption provider configuration to destination
+func ConfigToTransformerOverrides(f io.Reader, destination *map[schema.GroupResource]value.Transformer) error {
+	config, err := ioutil.ReadAll(f)
+	if err != nil {
+		return fmt.Errorf("could not read contents: %v", err)
 	}
 
 	var providers []map[string]interface{}
-	yaml.Unmarshal(data, &providers)
+	yaml.Unmarshal(config, &providers)
 
 	resourceToPrefixTransformer := map[schema.GroupResource][]value.PrefixTransformer{}
 
@@ -67,19 +91,11 @@ func (e EncryptionProviderConfig) Set(filepath string) error {
 		}
 	}
 
-	*e.TransformerMap = map[schema.GroupResource]value.Transformer{}
+	*destination = map[schema.GroupResource]value.Transformer{}
 	for gr, transList := range resourceToPrefixTransformer {
-		(*e.TransformerMap)[gr] = value.NewMutableTransformer(value.NewPrefixTransformers(fmt.Errorf("no matching prefix found"), transList...))
+		(*destination)[gr] = value.NewMutableTransformer(value.NewPrefixTransformers(fmt.Errorf("no matching prefix found"), transList...))
 	}
 	return nil
-}
-
-func (e EncryptionProviderConfig) String() string {
-	return e.name
-}
-
-func (e EncryptionProviderConfig) Type() string {
-	return "experimental-encryption-provider-config"
 }
 
 // Stores information common to all encryption providers
@@ -99,7 +115,7 @@ func parseProviderInfo(config map[string]interface{}) (providerInfo, error) {
 
 	if resources, ok := config["resource"].(string); ok {
 		for _, resource := range strings.Split(resources, ",") {
-			result.Resource = append(result.Resource, schema.ParseGroupResource(resource))
+			result.Resource = append(result.Resource, schema.ParseGroupResource(strings.TrimSpace(resource)))
 		}
 	} else {
 		return result, fmt.Errorf("ignoring encryption provider \"%s\" without a valid \"resource\" key specified in configuration", result.Kind)

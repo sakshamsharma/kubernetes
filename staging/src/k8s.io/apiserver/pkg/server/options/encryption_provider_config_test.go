@@ -17,12 +17,11 @@ limitations under the License.
 package options
 
 import (
-	"io/ioutil"
-	"os"
-
-	"k8s.io/apiserver/pkg/storage/value"
-
+	"strings"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/storage/value"
 )
 
 var correctConfig string = `
@@ -41,20 +40,20 @@ var correctConfig string = `
       secret: dGhpcyBpcyBwYXNzd29yZA==
     - name: key3
       secret: azhzIHNlY3JldCBzdG9yZQ==
-  resource: /registry/
+  resource: namespaces,secrets
 `
 
-var incorrectConfig1 string = `
+var incorrectConfigNoSecretForKey string = `
 - kind: k8s-aes-gcm
   version: v1
   keys:
     - name: key1
     - name: key2
       secret: dGhpcyBpcyBwYXNzd29yZA==
-  resource: /registry/namespaces
+  resource: namespaces,secrets
 `
 
-var incorrectConfig2 string = `
+var incorrectConfigNoResource string = `
 - kind: k8s-aes-gcm
   version: v1
   keys:
@@ -62,75 +61,42 @@ var incorrectConfig2 string = `
       secret: dGhpcyBpcyBwYXNzd29yZA==
 `
 
-var incorrectConfig3 string = `
+var incorrectConfigInvalidKey string = `
 - kind: k8s-aes-gcm
   version: v1
   keys:
     - name: key1
       secret: YSBzZWNyZXQgYSBzZWNyZXQ=
-  resource: /registry/namespaces
+  resource: namespaces,secrets
 `
 
-func TestEncryptionProviderConfigCorrectParsing(t *testing.T) {
-	testConfigFile := ".test-enc-provider-correct"
-
-	err := ioutil.WriteFile(testConfigFile, []byte(correctConfig), 0600)
-	if err != nil {
-		t.Fatalf("error while writing test configuration to disk: %s", err)
-	}
-	defer os.Remove(testConfigFile)
-
-	var transformerLocation value.Transformer
-	err = EncryptionProviderConfig{Transformer: &transformerLocation}.Set(testConfigFile)
-	if err != nil {
+func TestEncryptionProviderConfigCorrect(t *testing.T) {
+	var destination map[schema.GroupResource]value.Transformer
+	if err := ConfigToTransformerOverrides(strings.NewReader(correctConfig), &destination); err != nil {
 		t.Fatalf("error while parsing configuration file: %s", err)
 	}
 }
 
 // Throw error if key has no secret
-func TestEncryptionProviderConfigIncorrectParsing1(t *testing.T) {
-	testConfigFile := ".test-enc-provider-incorrect1"
-
-	err := ioutil.WriteFile(testConfigFile, []byte(incorrectConfig1), 0600)
-	if err != nil {
-		t.Fatalf("error while writing test configuration to disk: %s", err)
-	}
-	defer os.Remove(testConfigFile)
-
-	err = EncryptionProviderConfig{}.Set(testConfigFile)
-	if err == nil {
-		t.Fatalf("invalid configuration file (one key has no secret) got parsed:\n%s", incorrectConfig2)
+func TestEncryptionProviderConfigNoSecretForKey(t *testing.T) {
+	var destination map[schema.GroupResource]value.Transformer
+	if ConfigToTransformerOverrides(strings.NewReader(incorrectConfigNoSecretForKey), &destination) == nil {
+		t.Fatalf("invalid configuration file (one key has no secret) got parsed:\n%s", incorrectConfigNoSecretForKey)
 	}
 }
 
 // Throw error if provider has no resource
-func TestEncryptionProviderConfigIncorrectParsing2(t *testing.T) {
-	testConfigFile := ".test-enc-provider-incorrect2"
-
-	err := ioutil.WriteFile(testConfigFile, []byte(incorrectConfig2), 0600)
-	if err != nil {
-		t.Fatalf("error while writing test configuration to disk: %s", err)
-	}
-	defer os.Remove(testConfigFile)
-
-	err = EncryptionProviderConfig{}.Set(testConfigFile)
-	if err == nil {
-		t.Fatalf("invalid configuration file (one provider has no resource) got parsed:\n%s", incorrectConfig2)
+func TestEncryptionProviderConfigNoResource(t *testing.T) {
+	var destination map[schema.GroupResource]value.Transformer
+	if ConfigToTransformerOverrides(strings.NewReader(incorrectConfigNoResource), &destination) == nil {
+		t.Fatalf("invalid configuration file (one provider has no resource) got parsed:\n%s", incorrectConfigNoResource)
 	}
 }
 
 // Throw error if invalid key for AES
-func TestEncryptionProviderConfigIncorrectParsing3(t *testing.T) {
-	testConfigFile := ".test-enc-provider-incorrect3"
-
-	err := ioutil.WriteFile(testConfigFile, []byte(incorrectConfig3), 0600)
-	if err != nil {
-		t.Fatalf("error while writing test configuration to disk: %s", err)
-	}
-	defer os.Remove(testConfigFile)
-
-	err = EncryptionProviderConfig{}.Set(testConfigFile)
-	if err == nil {
-		t.Fatalf("invalid configuration file (bad AES key) got parsed:\n%s", incorrectConfig2)
+func TestEncryptionProviderConfigInvalidKey(t *testing.T) {
+	var destination map[schema.GroupResource]value.Transformer
+	if ConfigToTransformerOverrides(strings.NewReader(incorrectConfigInvalidKey), &destination) == nil {
+		t.Fatalf("invalid configuration file (bad AES key) got parsed:\n%s", incorrectConfigInvalidKey)
 	}
 }
