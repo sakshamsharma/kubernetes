@@ -272,10 +272,6 @@ func (s *DefaultStorageFactory) NewConfig(groupResource schema.GroupResource) (*
 		return nil, err
 	}
 
-	if transformer, ok := s.StorageConfig.TransformerMap[chosenStorageResource]; ok {
-		storageConfig.Transformer = transformer
-	}
-
 	glog.V(3).Infof("storing %v in %v, reading as %v from %v", groupResource, codecConfig.StorageVersion, codecConfig.MemoryVersion, codecConfig.Config)
 
 	return &storageConfig, nil
