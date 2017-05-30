@@ -19,7 +19,6 @@ go_library(
     name = "go_default_library",
     srcs = [
         "helpers.go",
-        "location_transformer.go",
         "transformer.go",
     ],
     tags = ["automanaged"],
