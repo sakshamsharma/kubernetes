@@ -25,49 +25,51 @@ import (
 )
 
 var correctConfig string = `
-- kind: k8s-aes-gcm
-  version: v1
-  keys:
-    - name: key1
-      secret: c2VjcmV0IGlzIHNlY3VyZQ==
-    - name: key2
-      secret: dGhpcyBpcyBwYXNzd29yZA==
-  resource: /registry/namespaces
-- kind: k8s-aes-gcm
-  version: v1
-  keys:
-    - name: key2
-      secret: dGhpcyBpcyBwYXNzd29yZA==
-    - name: key3
-      secret: azhzIHNlY3JldCBzdG9yZQ==
-  resource: namespaces,secrets
+kind: EncryptionConfig
+apiVersion: v1
+resources:
+  - resources:
+    - namespaces
+    providers:
+    - k8s-aes-v1:
+        keys:
+        - name: key1
+          secret: c2VjcmV0IGlzIHNlY3VyZQ==
+        - name: key2
+          secret: dGhpcyBpcyBwYXNzd29yZA==
+    - identity:
+        use_prefix: no
 `
 
 var incorrectConfigNoSecretForKey string = `
-- kind: k8s-aes-gcm
-  version: v1
-  keys:
-    - name: key1
-    - name: key2
-      secret: dGhpcyBpcyBwYXNzd29yZA==
-  resource: namespaces,secrets
-`
-
-var incorrectConfigNoResource string = `
-- kind: k8s-aes-gcm
-  version: v1
-  keys:
-    - name: key2
-      secret: dGhpcyBpcyBwYXNzd29yZA==
+kind: EncryptionConfig
+apiVersion: v1
+resources:
+  - resources:
+    - namespaces
+    - secrets
+    providers:
+    - k8s-aes-v1:
+        keys:
+        - name: key1
 `
 
 var incorrectConfigInvalidKey string = `
-- kind: k8s-aes-gcm
-  version: v1
-  keys:
-    - name: key1
-      secret: YSBzZWNyZXQgYSBzZWNyZXQ=
-  resource: namespaces,secrets
+kind: EncryptionConfig
+apiVersion: v1
+resources:
+  - resources:
+    - namespaces
+    - secrets
+    providers:
+    - identity:
+        use_prefix: no
+    - k8s-aes-v1:
+        keys:
+        - name: key1
+          secret: c2VjcmV0IGlzIHNlY3VyZQ==
+		- name: key2
+          secret: YSBzZWNyZXQgYSBzZWNyZXQ=
 `
 
 func TestEncryptionProviderConfigCorrect(t *testing.T) {
@@ -82,14 +84,6 @@ func TestEncryptionProviderConfigNoSecretForKey(t *testing.T) {
 	var destination map[schema.GroupResource]value.Transformer
 	if ConfigToTransformerOverrides(strings.NewReader(incorrectConfigNoSecretForKey), &destination) == nil {
 		t.Fatalf("invalid configuration file (one key has no secret) got parsed:\n%s", incorrectConfigNoSecretForKey)
-	}
-}
-
-// Throw error if provider has no resource
-func TestEncryptionProviderConfigNoResource(t *testing.T) {
-	var destination map[schema.GroupResource]value.Transformer
-	if ConfigToTransformerOverrides(strings.NewReader(incorrectConfigNoResource), &destination) == nil {
-		t.Fatalf("invalid configuration file (one provider has no resource) got parsed:\n%s", incorrectConfigNoResource)
 	}
 }
 

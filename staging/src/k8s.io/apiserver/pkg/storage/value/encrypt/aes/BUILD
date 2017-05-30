@@ -18,7 +18,10 @@ go_test(
 
 go_library(
     name = "go_default_library",
-    srcs = ["aes.go"],
+    srcs = [
+        "aes.go",
+        "aes_config.go",
+    ],
     tags = ["automanaged"],
     deps = ["//vendor/k8s.io/apiserver/pkg/storage/value:go_default_library"],
 )

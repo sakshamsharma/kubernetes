@@ -32,7 +32,8 @@ import (
 
 // ProviderConfig stores the provided configuration for a provider
 type ProviderConfig struct {
-	AesConfig aes.Config `json:"k8s-aes-v1"`
+	AesConfig      aes.Config           `json:"k8s-aes-v1"`
+	IdentityConfig value.IdentityConfig `json:"identity"`
 }
 
 type ResourceConfig struct {
@@ -50,6 +51,9 @@ type ConfigFile struct {
 func (config *ResourceConfig) GetPrefixTransformer() ([]value.PrefixTransformer, error) {
 
 	var result []value.PrefixTransformer
+	if len(config.Providers) == 0 {
+		return result, fmt.Errorf("no valid provider specified in configuration")
+	}
 
 	// For each provider listed for these resources
 	for _, providerConfig := range config.Providers {
@@ -58,7 +62,7 @@ func (config *ResourceConfig) GetPrefixTransformer() ([]value.PrefixTransformer,
 		found := false
 
 		// Try which transformer is requested to be configured
-		for _, transformerConfig := range []value.TransformerConfig{providerConfig.AesConfig} {
+		for _, transformerConfig := range []value.TransformerConfig{providerConfig.AesConfig, providerConfig.IdentityConfig} {
 			// Check whether the configuration exists, and is valid
 			exists, err := transformerConfig.SanityCheck()
 			if exists && err == nil {
@@ -133,8 +137,11 @@ func ConfigToTransformerOverrides(f io.Reader, destination *map[schema.GroupReso
 		return fmt.Errorf("error while parsing configuration: %v", err)
 	}
 
-	if config.Kind != "EncryptionConfig" {
-		return fmt.Errorf("invalid configuration kind provided for encryption provider config")
+	if config.Kind != "EncryptionConfig" && config.Kind != "" {
+		return fmt.Errorf("invalid configuration kind provided for encryption provider config: " + config.Kind)
+	}
+	if config.Kind == "" {
+		return fmt.Errorf("invalid configuration file provided")
 	}
 	// TODO config.ApiVersion is unchecked
 
