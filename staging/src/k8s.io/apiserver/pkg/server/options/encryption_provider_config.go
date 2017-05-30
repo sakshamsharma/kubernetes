@@ -23,14 +23,15 @@ import (
 
 	yaml "github.com/ghodss/yaml"
 
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
 	aestransformer "k8s.io/apiserver/pkg/storage/value/encrypt/aes"
 )
 
 // Used for parsing command line parameters for selecting transformer
 type EncryptionProviderConfig struct {
-	Transformer *value.Transformer
-	name        string
+	TransformerMap *map[schema.GroupResource]value.Transformer
+	name           string
 }
 
 func (e EncryptionProviderConfig) Set(filepath string) error {
@@ -42,8 +43,7 @@ func (e EncryptionProviderConfig) Set(filepath string) error {
 	var providers []map[string]interface{}
 	yaml.Unmarshal(data, &providers)
 
-	// The final transformers which will be wrapped inside a location transformer, and then a mutable transformer
-	transformers := []value.LocationTransformer{}
+	resourceToPrefixTransformer := map[schema.GroupResource][]value.PrefixTransformer{}
 
 	// For each provider listed in config file
 	for _, provider := range providers {
@@ -57,15 +57,20 @@ func (e EncryptionProviderConfig) Set(filepath string) error {
 			if err != nil {
 				return err
 			}
-			transformers = append(transformers,
-				value.LocationTransformer{Transformer: aead, Location: providerConfig.Resource})
+
+			for _, resource := range providerConfig.Resource {
+				resourceToPrefixTransformer[resource] = append(
+					resourceToPrefixTransformer[resource], aead)
+			}
 		} else {
 			return fmt.Errorf("found encryption provider with unknown \"kind\": %s", providerConfig.Kind)
 		}
 	}
 
-	locationTransformer := value.NewLocationTransformers(fmt.Errorf("no such transformer found"), transformers...)
-	*e.Transformer = value.NewMutableTransformer(locationTransformer)
+	*e.TransformerMap = map[schema.GroupResource]value.Transformer{}
+	for gr, transList := range resourceToPrefixTransformer {
+		(*e.TransformerMap)[gr] = value.NewMutableTransformer(value.NewPrefixTransformers(fmt.Errorf("no matching prefix found"), transList...))
+	}
 	return nil
 }
 
@@ -81,7 +86,7 @@ func (e EncryptionProviderConfig) Type() string {
 type providerInfo struct {
 	Kind     string
 	Version  string
-	Resource string
+	Resource []schema.GroupResource
 }
 
 func parseProviderInfo(config map[string]interface{}) (providerInfo, error) {
@@ -92,11 +97,10 @@ func parseProviderInfo(config map[string]interface{}) (providerInfo, error) {
 		return result, fmt.Errorf("found encryption provider without a valid \"kind\" key specified in configuration")
 	}
 
-	if resource, ok := config["resource"].(string); ok {
-		if !strings.HasSuffix(resource, "/") {
-			resource = resource + "/"
+	if resources, ok := config["resource"].(string); ok {
+		for _, resource := range strings.Split(resources, ",") {
+			result.Resource = append(result.Resource, schema.ParseGroupResource(resource))
 		}
-		result.Resource = resource
 	} else {
 		return result, fmt.Errorf("ignoring encryption provider \"%s\" without a valid \"resource\" key specified in configuration", result.Kind)
 	}
