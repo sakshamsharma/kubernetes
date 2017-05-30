@@ -18,10 +18,8 @@ limitations under the License.
 package aes
 
 import (
-	"crypto/aes"
 	"crypto/cipher"
 	"crypto/rand"
-	"encoding/base64"
 	"fmt"
 
 	"k8s.io/apiserver/pkg/storage/value"
@@ -50,66 +48,6 @@ func NewGCMTransformer(block cipher.Block) value.Transformer {
 	return &gcm{block: block}
 }
 
-// NewGCMTransformerFromConfig takes a configuration and creates a prefix transformer to
-// handle AEAD encryption for multiple keys. Secrets must be 16, 24 or 32 bytes long,
-// and encoded in base64.
-// Example configuration:
-// keys:
-//   - name: key1
-//     secret: c2VjcmV0IGlzIHNlY3VyZQ==
-//   - name: key2
-//     secret: dGhpcyBpcyBwYXNzd29yZA==
-func NewGCMTransformerFromConfig(config map[string]interface{}) (value.PrefixTransformer, error) {
-
-	var result value.PrefixTransformer
-
-	// Obtain list of keys as []interface{}
-	if keysInterface, ok := config["keys"].([]interface{}); ok {
-
-		keyTransformers := []value.PrefixTransformer{}
-
-		// Iterate over all keys in configuration
-		for _, keyMap := range keysInterface {
-
-			// Get the key configuration as a struct
-			keyConfig, err := value.GetKeyDataFromConfig(keyMap)
-			if err != nil {
-				return result, err
-			}
-
-			key, err := base64.StdEncoding.DecodeString(keyConfig.Secret)
-			if err != nil {
-				return result, fmt.Errorf("could not obtain secret for named key %s: %s", keyConfig.Name, err)
-			}
-			block, err := aes.NewCipher(key)
-			if err != nil {
-				return result, fmt.Errorf("error while creating cipher for named key %s: %s", keyConfig.Name, err)
-			}
-
-			// Create a new PrefixTransformer for this key
-			keyTransformers = append(keyTransformers,
-				value.PrefixTransformer{
-					Transformer: NewGCMTransformer(block),
-					Prefix:      []byte(keyConfig.Name + ":"),
-				})
-		}
-
-		// Create a prefixTransformer which can choose between these keys
-		keyTransformer := value.NewPrefixTransformers(
-			fmt.Errorf("no matching key was found for the provided AEAD transformer"), keyTransformers...)
-
-		// Create a PrefixTransformer which shall later be put in a list with other providers
-		result = value.PrefixTransformer{
-			Transformer: keyTransformer,
-			Prefix:      []byte("k8s-aes-gcm-v1:"),
-		}
-
-		return result, nil
-	}
-
-	return result, fmt.Errorf("no valid keys found in configuration for k8s-aes-gcm-v1 transformer")
-}
-
 func (t *gcm) TransformFromStorage(data []byte, context value.Context) ([]byte, bool, error) {
 	aead, err := cipher.NewGCM(t.block)
 	if err != nil {
@@ -120,6 +58,7 @@ func (t *gcm) TransformFromStorage(data []byte, context value.Context) ([]byte, 
 		return nil, false, fmt.Errorf("the stored data was shorter than the required size")
 	}
 	result, err := aead.Open(nil, data[:nonceSize], data[nonceSize:], context.AuthenticatedData())
+	fmt.Println("YAAY From storage: " + string(context.AuthenticatedData()))
 	return result, false, err
 }
 
@@ -138,5 +77,6 @@ func (t *gcm) TransformToStorage(data []byte, context value.Context) ([]byte, er
 		return nil, fmt.Errorf("unable to read sufficient random bytes")
 	}
 	cipherText := aead.Seal(result[nonceSize:nonceSize], result[:nonceSize], data, context.AuthenticatedData())
+	fmt.Println("YAAY To storage: " + string(context.AuthenticatedData()))
 	return result[:nonceSize+len(cipherText)], nil
 }
