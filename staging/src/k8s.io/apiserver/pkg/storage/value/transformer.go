@@ -144,3 +144,12 @@ func (t *prefixTransformers) TransformToStorage(data []byte, context Context) ([
 	prefixedData = append(prefixedData, result...)
 	return prefixedData, nil
 }
+
+// TransformerConfig is satisfied by the structs representing the configuration API
+type TransformerConfig interface {
+	// GetPrefixTransformer creates and returns a PrefixTransformer for the transformer provided in configuration
+	GetPrefixTransformer() (PrefixTransformer, error)
+
+	// SanityCheck informs if the configuration exists, and if it had an error while parsing
+	SanityCheck() (bool, error)
+}

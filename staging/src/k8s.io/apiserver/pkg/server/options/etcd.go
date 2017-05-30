@@ -112,7 +112,7 @@ func (s *EtcdOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&s.StorageConfig.Quorum, "etcd-quorum-read", s.StorageConfig.Quorum,
 		"If true, enable quorum read.")
 
-	fs.Var(EncryptionProviderConfig{TransformerOverrides: &s.TransformerOverrides}, "experimental-encryption-provider-config",
+	fs.Var(EncryptionProviderOverrides{TransformerOverrides: &s.TransformerOverrides}, "experimental-encryption-provider-config",
 		"The file containing configuration for encryption providers to be used for storing secrets in etcd")
 }
 
