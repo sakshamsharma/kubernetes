@@ -59,7 +59,9 @@ func NewGCMTransformer(block cipher.Block) value.Transformer {
 //     secret: c2VjcmV0IGlzIHNlY3VyZQ==
 //   - name: key2
 //     secret: dGhpcyBpcyBwYXNzd29yZA==
-func NewGCMTransformerFromConfig(config map[string]interface{}) (value.Transformer, error) {
+func NewGCMTransformerFromConfig(config map[string]interface{}) (value.PrefixTransformer, error) {
+
+	var result value.PrefixTransformer
 
 	// Obtain list of keys as []interface{}
 	if keysInterface, ok := config["keys"].([]interface{}); ok {
@@ -72,16 +74,16 @@ func NewGCMTransformerFromConfig(config map[string]interface{}) (value.Transform
 			// Get the key configuration as a struct
 			keyConfig, err := value.GetKeyDataFromConfig(keyMap)
 			if err != nil {
-				return nil, err
+				return result, err
 			}
 
 			key, err := base64.StdEncoding.DecodeString(keyConfig.Secret)
 			if err != nil {
-				return nil, fmt.Errorf("could not obtain secret for named key %s: %s", keyConfig.Name, err)
+				return result, fmt.Errorf("could not obtain secret for named key %s: %s", keyConfig.Name, err)
 			}
 			block, err := aes.NewCipher(key)
 			if err != nil {
-				return nil, fmt.Errorf("error while creating cipher for named key %s: %s", keyConfig.Name, err)
+				return result, fmt.Errorf("error while creating cipher for named key %s: %s", keyConfig.Name, err)
 			}
 
 			// Create a new PrefixTransformer for this key
@@ -96,15 +98,16 @@ func NewGCMTransformerFromConfig(config map[string]interface{}) (value.Transform
 		keyTransformer := value.NewPrefixTransformers(
 			fmt.Errorf("no matching key was found for the provided AEAD transformer"), keyTransformers...)
 
-		// Create a prefixTransformer to parse the AEAD prefix
-		return value.NewPrefixTransformers(nil, value.PrefixTransformer{
+		// Create a PrefixTransformer which shall later be put in a list with other providers
+		result = value.PrefixTransformer{
 			Transformer: keyTransformer,
 			Prefix:      []byte("k8s-aes-gcm-v1:"),
-		}), nil
+		}
 
+		return result, nil
 	}
 
-	return nil, fmt.Errorf("no valid keys found in configuration for k8s-aes-gcm-v1 transformer")
+	return result, fmt.Errorf("no valid keys found in configuration for k8s-aes-gcm-v1 transformer")
 }
 
 func (t *gcm) TransformFromStorage(data []byte, context value.Context) ([]byte, bool, error) {

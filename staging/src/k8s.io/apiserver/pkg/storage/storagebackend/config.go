@@ -18,6 +18,7 @@ package storagebackend
 
 import (
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
 )
 
@@ -50,6 +51,9 @@ type Config struct {
 	Copier runtime.ObjectCopier
 	// Transformer allows the value to be transformed prior to persisting into etcd.
 	Transformer value.Transformer
+
+	// Stores the map from resource to transformer
+	TransformerMap map[schema.GroupResource]value.Transformer
 }
 
 func NewDefaultConfig(prefix string, copier runtime.ObjectCopier, codec runtime.Codec) *Config {
