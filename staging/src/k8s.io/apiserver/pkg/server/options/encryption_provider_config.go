@@ -27,7 +27,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
 
-	genericconfig "k8s.io/apiserver/pkg/server/options/config"
+	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 )
 
 // EncryptionProviderOverrides is used for passing parsed information information from CLI flag to storageConfig
@@ -64,7 +64,7 @@ func ConfigToTransformerOverrides(f io.Reader, destination *map[schema.GroupReso
 		return fmt.Errorf("could not read contents: %v", err)
 	}
 
-	var config genericconfig.File
+	var config encryptionconfig.File
 	err = yaml.Unmarshal(configFileContents, &config)
 	if err != nil {
 		return fmt.Errorf("error while parsing configuration: %v", err)
@@ -82,7 +82,7 @@ func ConfigToTransformerOverrides(f io.Reader, destination *map[schema.GroupReso
 
 	// For each provider listed in config file
 	for _, resourceConfig := range config.Resources {
-		transformers, err := resourceConfig.GetPrefixTransformer()
+		transformers, err := resourceConfig.GetPrefixTransformers()
 		if err != nil {
 			return err
 		}

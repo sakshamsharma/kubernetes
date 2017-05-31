@@ -49,10 +49,6 @@ type identityTransformer struct{}
 var IdentityTransformer Transformer = identityTransformer{}
 
 func (identityTransformer) TransformFromStorage(b []byte, ctx Context) ([]byte, bool, error) {
-	// Other providers do not have k8s prefix
-	if len(b) > 0 && b[0] != '{' && bytes.HasPrefix(b, []byte("k8s:enc:")) {
-		return []byte{}, false, fmt.Errorf("data is not plain JSON / protobuf")
-	}
 	return b, false, nil
 }
 func (identityTransformer) TransformToStorage(b []byte, ctx Context) ([]byte, error) {

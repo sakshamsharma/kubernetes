@@ -31,13 +31,13 @@ resources:
   - resources:
     - namespaces
     providers:
-    - type: aes
-      keys:
-      - name: key1
-        secret: c2VjcmV0IGlzIHNlY3VyZQ==
-      - name: key2
-        secret: dGhpcyBpcyBwYXNzd29yZA==
-    - type: identity
+    - identity: {}
+    - aes:
+        keys:
+        - name: key1
+          secret: c2VjcmV0IGlzIHNlY3VyZQ==
+        - name: key2
+          secret: dGhpcyBpcyBwYXNzd29yZA==
 `
 
 var incorrectConfigNoSecretForKey = `
@@ -48,9 +48,9 @@ resources:
     - namespaces
     - secrets
     providers:
-    - type: aes
-      keys:
-      - name: key1
+    - aes:
+        keys:
+        - name: key1
 `
 
 var incorrectConfigInvalidKey = `
@@ -61,12 +61,12 @@ resources:
     - namespaces
     - secrets
     providers:
-    - type: aes
-      keys:
-      - name: key1
-        secret: c2VjcmV0IGlzIHNlY3VyZQ==
-      - name: key2
-        secret: YSBzZWNyZXQgYSBzZWNyZXQ=
+    - aes:
+        keys:
+        - name: key1
+          secret: c2VjcmV0IGlzIHNlY3VyZQ==
+        - name: key2
+          secret: YSBzZWNyZXQgYSBzZWNyZXQ=
 `
 
 func TestEncryptionProviderConfigCorrect(t *testing.T) {
