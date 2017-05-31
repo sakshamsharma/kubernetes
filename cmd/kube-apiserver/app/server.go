@@ -496,7 +496,11 @@ func BuildStorageFactory(s *options.ServerRunOptions) (*serverstorage.DefaultSto
 		storageFactory.SetEtcdLocation(groupResource, servers)
 	}
 
-	for groupResource, transformer := range s.Etcd.TransformerOverrides {
+	transformerOverrides, err := s.Etcd.EncryptionProviderConfig.GetTransformerOverrides()
+	if err != nil {
+		return nil, err
+	}
+	for groupResource, transformer := range transformerOverrides {
 		storageFactory.SetTransformer(groupResource, transformer)
 	}
 

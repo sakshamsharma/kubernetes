@@ -25,16 +25,16 @@ import (
 	"k8s.io/apiserver/pkg/registry/generic"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/server"
+	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
-	"k8s.io/apiserver/pkg/storage/value"
 )
 
 type EtcdOptions struct {
-	StorageConfig storagebackend.Config
+	StorageConfig            storagebackend.Config
+	EncryptionProviderConfig encryptionconfig.Config
 
 	EtcdServersOverrides []string
-	TransformerOverrides map[schema.GroupResource]value.Transformer
 
 	// To enable protobuf as storage format, it is enough
 	// to set it to "application/vnd.kubernetes.protobuf".
@@ -112,7 +112,7 @@ func (s *EtcdOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&s.StorageConfig.Quorum, "etcd-quorum-read", s.StorageConfig.Quorum,
 		"If true, enable quorum read.")
 
-	fs.Var(EncryptionProviderOverrides{TransformerOverrides: &s.TransformerOverrides}, "experimental-encryption-provider-config",
+	fs.StringVar(&s.EncryptionProviderConfig.Filepath, "experimental-encryption-provider-config", s.EncryptionProviderConfig.Filepath,
 		"The file containing configuration for encryption providers to be used for storing secrets in etcd")
 }
 

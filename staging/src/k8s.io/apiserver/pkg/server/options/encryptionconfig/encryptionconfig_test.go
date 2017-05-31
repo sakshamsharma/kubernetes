@@ -14,14 +14,11 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package options
+package encryptionconfig
 
 import (
 	"strings"
 	"testing"
-
-	"k8s.io/apimachinery/pkg/runtime/schema"
-	"k8s.io/apiserver/pkg/storage/value"
 )
 
 var correctConfig = `
@@ -70,24 +67,21 @@ resources:
 `
 
 func TestEncryptionProviderConfigCorrect(t *testing.T) {
-	var destination map[schema.GroupResource]value.Transformer
-	if err := ConfigToTransformerOverrides(strings.NewReader(correctConfig), &destination); err != nil {
+	if _, err := ParseEncryptionConfiguration(strings.NewReader(correctConfig)); err != nil {
 		t.Fatalf("error while parsing configuration file: %s", err)
 	}
 }
 
 // Throw error if key has no secret
 func TestEncryptionProviderConfigNoSecretForKey(t *testing.T) {
-	var destination map[schema.GroupResource]value.Transformer
-	if ConfigToTransformerOverrides(strings.NewReader(incorrectConfigNoSecretForKey), &destination) == nil {
+	if _, err := ParseEncryptionConfiguration(strings.NewReader(incorrectConfigNoSecretForKey)); err == nil {
 		t.Fatalf("invalid configuration file (one key has no secret) got parsed:\n%s", incorrectConfigNoSecretForKey)
 	}
 }
 
 // Throw error if invalid key for AES
 func TestEncryptionProviderConfigInvalidKey(t *testing.T) {
-	var destination map[schema.GroupResource]value.Transformer
-	if ConfigToTransformerOverrides(strings.NewReader(incorrectConfigInvalidKey), &destination) == nil {
+	if _, err := ParseEncryptionConfiguration(strings.NewReader(incorrectConfigInvalidKey)); err == nil {
 		t.Fatalf("invalid configuration file (bad AES key) got parsed:\n%s", incorrectConfigInvalidKey)
 	}
 }

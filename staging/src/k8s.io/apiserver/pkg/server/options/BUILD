@@ -10,21 +10,16 @@ load(
 
 go_test(
     name = "go_default_test",
-    srcs = [
-        "encryption_provider_config_test.go",
-        "serving_test.go",
-    ],
+    srcs = ["serving_test.go"],
     library = ":go_default_library",
     tags = ["automanaged"],
     deps = [
         "//vendor/github.com/stretchr/testify/assert:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/runtime:go_default_library",
-        "//vendor/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/runtime/serializer:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/version:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/endpoints/request:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/server:go_default_library",
-        "//vendor/k8s.io/apiserver/pkg/storage/value:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/util/flag:go_default_library",
         "//vendor/k8s.io/client-go/discovery:go_default_library",
         "//vendor/k8s.io/client-go/rest:go_default_library",
@@ -40,7 +35,6 @@ go_library(
         "authentication.go",
         "authorization.go",
         "doc.go",
-        "encryption_provider_config.go",
         "etcd.go",
         "feature.go",
         "recommended.go",
@@ -49,7 +43,6 @@ go_library(
     ],
     tags = ["automanaged"],
     deps = [
-        "//vendor/github.com/ghodss/yaml:go_default_library",
         "//vendor/github.com/golang/glog:go_default_library",
         "//vendor/github.com/pborman/uuid:go_default_library",
         "//vendor/github.com/spf13/pflag:go_default_library",
@@ -72,7 +65,6 @@ go_library(
         "//vendor/k8s.io/apiserver/pkg/server/options/encryptionconfig:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/server/storage:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/storage/storagebackend:go_default_library",
-        "//vendor/k8s.io/apiserver/pkg/storage/value:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/util/feature:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/util/flag:go_default_library",
         "//vendor/k8s.io/apiserver/plugin/pkg/audit/log:go_default_library",
