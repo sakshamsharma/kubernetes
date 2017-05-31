@@ -24,24 +24,23 @@ import (
 	"k8s.io/apiserver/pkg/storage/value"
 )
 
-var correctConfig string = `
+var correctConfig = `
 kind: EncryptionConfig
 apiVersion: v1
 resources:
   - resources:
     - namespaces
     providers:
-    - k8s-aes-v1:
-        keys:
-        - name: key1
-          secret: c2VjcmV0IGlzIHNlY3VyZQ==
-        - name: key2
-          secret: dGhpcyBpcyBwYXNzd29yZA==
-    - identity:
-        use_prefix: no
+    - type: aes
+      keys:
+      - name: key1
+        secret: c2VjcmV0IGlzIHNlY3VyZQ==
+      - name: key2
+        secret: dGhpcyBpcyBwYXNzd29yZA==
+    - type: identity
 `
 
-var incorrectConfigNoSecretForKey string = `
+var incorrectConfigNoSecretForKey = `
 kind: EncryptionConfig
 apiVersion: v1
 resources:
@@ -49,12 +48,12 @@ resources:
     - namespaces
     - secrets
     providers:
-    - k8s-aes-v1:
-        keys:
-        - name: key1
+    - type: aes
+      keys:
+      - name: key1
 `
 
-var incorrectConfigInvalidKey string = `
+var incorrectConfigInvalidKey = `
 kind: EncryptionConfig
 apiVersion: v1
 resources:
@@ -62,14 +61,12 @@ resources:
     - namespaces
     - secrets
     providers:
-    - identity:
-        use_prefix: no
-    - k8s-aes-v1:
-        keys:
-        - name: key1
-          secret: c2VjcmV0IGlzIHNlY3VyZQ==
-		- name: key2
-          secret: YSBzZWNyZXQgYSBzZWNyZXQ=
+    - type: aes
+      keys:
+      - name: key1
+        secret: c2VjcmV0IGlzIHNlY3VyZQ==
+      - name: key2
+        secret: YSBzZWNyZXQgYSBzZWNyZXQ=
 `
 
 func TestEncryptionProviderConfigCorrect(t *testing.T) {

@@ -15,7 +15,7 @@ limitations under the License.
 */
 
 // Package aes transforms values for storage at rest using AES-GCM.
-package aes
+package config
 
 import (
 	"crypto/aes"
@@ -23,33 +23,21 @@ import (
 	"fmt"
 
 	"k8s.io/apiserver/pkg/storage/value"
+	aestransformer "k8s.io/apiserver/pkg/storage/value/encrypt/aes"
 )
 
-type key struct {
+type Key struct {
 	Name   string `json:"name"`
 	Secret string `json:"secret"`
 }
 
 // Config contains the API configuration for an AES transformer
-type Config struct {
-	Keys []key `json:"keys"`
+type AesConfig struct {
+	Keys []Key `json:"keys"`
 }
 
-// SanityCheck implements the TransformerConfig interface for Config
-func (config Config) SanityCheck() (bool, error) {
-	if len(config.Keys) == 0 {
-		return false, nil
-	}
-	for _, key := range config.Keys {
-		if key.Name == "" || key.Secret == "" {
-			return true, fmt.Errorf("invalid key provided, name or secret missing")
-		}
-	}
-	return true, nil
-}
-
-// GetPrefixTransformer implements the TransformerConfig interface for Config
-func (config Config) GetPrefixTransformer() (value.PrefixTransformer, error) {
+// GetPrefixTransformer implements the TransformerConfig interface for AesConfig
+func (config AesConfig) GetPrefixTransformer() (value.PrefixTransformer, error) {
 	keyTransformers := []value.PrefixTransformer{}
 	var result value.PrefixTransformer
 
@@ -66,7 +54,7 @@ func (config Config) GetPrefixTransformer() (value.PrefixTransformer, error) {
 		// Create a new PrefixTransformer for this key
 		keyTransformers = append(keyTransformers,
 			value.PrefixTransformer{
-				Transformer: NewGCMTransformer(block),
+				Transformer: aestransformer.NewGCMTransformer(block),
 				Prefix:      []byte(keyData.Name + ":"),
 			})
 	}
@@ -78,7 +66,7 @@ func (config Config) GetPrefixTransformer() (value.PrefixTransformer, error) {
 	// Create a PrefixTransformer which shall later be put in a list with other providers
 	result = value.PrefixTransformer{
 		Transformer: keyTransformer,
-		Prefix:      []byte("enc-k8s-aes-v1:"),
+		Prefix:      []byte("k8s:enc:aes:v1:"),
 	}
 
 	return result, nil
