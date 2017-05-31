@@ -126,7 +126,9 @@ func (t *prefixTransformers) TransformFromStorage(data []byte, context Context) 
 	for i, transformer := range t.transformers {
 		if bytes.HasPrefix(data, transformer.Prefix) {
 			result, stale, err := transformer.Transformer.TransformFromStorage(data[len(transformer.Prefix):], context)
-			return result, stale || i != 0, err
+			if len(transformer.Prefix) != 0 || err == nil {
+				return result, stale || i != 0, err
+			}
 		}
 	}
 	return nil, false, t.err

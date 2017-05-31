@@ -32,22 +32,21 @@ import (
 	"k8s.io/apiserver/pkg/storage/value/encrypt/identity"
 )
 
-// Config stores the filepath to the encryption provider configuration
-type Config struct {
-	Filepath string
-}
+const (
+	aesTransformerPrefixV1 = "k8s:enc:aes:v1:"
+)
 
 // GetTransformerOverrides returns the transformer overrides by reading and parsing the encryption provider configuration file
-func (config Config) GetTransformerOverrides() (map[schema.GroupResource]value.Transformer, error) {
-	f, err := os.Open(config.Filepath)
+func GetTransformerOverrides(filepath string) (map[schema.GroupResource]value.Transformer, error) {
+	f, err := os.Open(filepath)
 	if err != nil {
-		return nil, fmt.Errorf("error opening encryption provider configuration file %q: %v", config.Filepath, err)
+		return nil, fmt.Errorf("error opening encryption provider configuration file %q: %v", filepath, err)
 	}
 	defer f.Close()
 
 	result, err := ParseEncryptionConfiguration(f)
 	if err != nil {
-		return nil, fmt.Errorf("error while parsing encryption provider configuration file %q: %v", config.Filepath, err)
+		return nil, fmt.Errorf("error while parsing encryption provider configuration file %q: %v", filepath, err)
 	}
 	return result, nil
 }
@@ -59,7 +58,7 @@ func ParseEncryptionConfiguration(f io.Reader) (map[schema.GroupResource]value.T
 		return nil, fmt.Errorf("could not read contents: %v", err)
 	}
 
-	var config File
+	var config EncryptionConfig
 	err = yaml.Unmarshal(configFileContents, &config)
 	if err != nil {
 		return nil, fmt.Errorf("error while parsing file: %v", err)
@@ -77,7 +76,7 @@ func ParseEncryptionConfiguration(f io.Reader) (map[schema.GroupResource]value.T
 
 	// For each entry in the configuration
 	for _, resourceConfig := range config.Resources {
-		transformers, err := GetPrefixTransformers(resourceConfig)
+		transformers, err := GetPrefixTransformers(&resourceConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +97,7 @@ func ParseEncryptionConfiguration(f io.Reader) (map[schema.GroupResource]value.T
 }
 
 // GetPrefixTransformer constructs and returns the appropriate prefix transformers for the passed resource using its configuration
-func GetPrefixTransformers(config ResourceConfig) ([]value.PrefixTransformer, error) {
+func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, error) {
 	var result []value.PrefixTransformer
 	for _, provider := range config.Providers {
 		found := false
@@ -173,7 +172,7 @@ func GetAESPrefixTransformer(config *AESConfig) (value.PrefixTransformer, error)
 	// Create a PrefixTransformer which shall later be put in a list with other providers
 	result = value.PrefixTransformer{
 		Transformer: keyTransformer,
-		Prefix:      []byte("k8s:enc:aes:v1:"),
+		Prefix:      []byte(aesTransformerPrefixV1),
 	}
 	return result, nil
 }

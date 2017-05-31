@@ -25,14 +25,13 @@ import (
 	"k8s.io/apiserver/pkg/registry/generic"
 	genericregistry "k8s.io/apiserver/pkg/registry/generic/registry"
 	"k8s.io/apiserver/pkg/server"
-	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
 	"k8s.io/apiserver/pkg/storage/storagebackend"
 )
 
 type EtcdOptions struct {
-	StorageConfig            storagebackend.Config
-	EncryptionProviderConfig encryptionconfig.Config
+	StorageConfig                    storagebackend.Config
+	EncryptionProviderConfigFilepath string
 
 	EtcdServersOverrides []string
 
@@ -112,7 +111,7 @@ func (s *EtcdOptions) AddFlags(fs *pflag.FlagSet) {
 	fs.BoolVar(&s.StorageConfig.Quorum, "etcd-quorum-read", s.StorageConfig.Quorum,
 		"If true, enable quorum read.")
 
-	fs.StringVar(&s.EncryptionProviderConfig.Filepath, "experimental-encryption-provider-config", s.EncryptionProviderConfig.Filepath,
+	fs.StringVar(&s.EncryptionProviderConfigFilepath, "experimental-encryption-provider-config", s.EncryptionProviderConfigFilepath,
 		"The file containing configuration for encryption providers to be used for storing secrets in etcd")
 }
 
