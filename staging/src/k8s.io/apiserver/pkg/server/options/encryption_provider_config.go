@@ -21,81 +21,14 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
-	"strings"
 
 	yaml "github.com/ghodss/yaml"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
-	"k8s.io/apiserver/pkg/storage/value/encrypt/aes"
+
+	genericconfig "k8s.io/apiserver/pkg/server/options/config"
 )
-
-// ProviderConfig stores the provided configuration for a provider
-type ProviderConfig struct {
-	AesConfig      aes.Config           `json:"k8s-aes-v1"`
-	IdentityConfig value.IdentityConfig `json:"identity"`
-}
-
-type ResourceConfig struct {
-	Resources []string         `json:"resources"`
-	Providers []ProviderConfig `json:"providers"`
-}
-
-type ConfigFile struct {
-	Kind       string           `json:"kind"`
-	ApiVersion string           `json:"apiVersion"`
-	Resources  []ResourceConfig `json:"resources"`
-}
-
-// GetPrefixTransformer constructs and returns the appropriate transformer from the configuration
-func (config *ResourceConfig) GetPrefixTransformer() ([]value.PrefixTransformer, error) {
-
-	var result []value.PrefixTransformer
-	if len(config.Providers) == 0 {
-		return result, fmt.Errorf("no valid provider specified in configuration")
-	}
-
-	// For each provider listed for these resources
-	for _, providerConfig := range config.Providers {
-
-		// Whether we found a parsable transformer configuration
-		found := false
-
-		// Try which transformer is requested to be configured
-		for _, transformerConfig := range []value.TransformerConfig{providerConfig.AesConfig, providerConfig.IdentityConfig} {
-			// Check whether the configuration exists, and is valid
-			exists, err := transformerConfig.SanityCheck()
-			if exists && err == nil {
-				// If this configuration was provided, and there was no parse error while reading it
-				transformer, err := transformerConfig.GetPrefixTransformer()
-				if err != nil {
-					return result, err
-				}
-				result = append(result, transformer)
-				found = true
-			} else if exists {
-				// If this configuration was provided, but it could not be parsed
-				return result, err
-			}
-			// else the configuration was not provided, in which case exists was false
-		}
-
-		if !found {
-			return result, fmt.Errorf("no valid encryption provider was specified for resources: " + strings.Join(config.Resources, ","))
-		}
-	}
-
-	return result, nil
-}
-
-// GetGroupResources returns a slice of group resources which have to be encrypted using this provider
-func (config *ResourceConfig) GetGroupResources() []schema.GroupResource {
-	resources := []schema.GroupResource{}
-	for _, resource := range config.Resources {
-		resources = append(resources, schema.ParseGroupResource(resource))
-	}
-	return resources
-}
 
 // EncryptionProviderOverrides is used for passing parsed information information from CLI flag to storageConfig
 type EncryptionProviderOverrides struct {
@@ -131,7 +64,7 @@ func ConfigToTransformerOverrides(f io.Reader, destination *map[schema.GroupReso
 		return fmt.Errorf("could not read contents: %v", err)
 	}
 
-	var config ConfigFile
+	var config genericconfig.File
 	err = yaml.Unmarshal(configFileContents, &config)
 	if err != nil {
 		return fmt.Errorf("error while parsing configuration: %v", err)
@@ -143,7 +76,7 @@ func ConfigToTransformerOverrides(f io.Reader, destination *map[schema.GroupReso
 	if config.Kind == "" {
 		return fmt.Errorf("invalid configuration file provided")
 	}
-	// TODO config.ApiVersion is unchecked
+	// TODO config.APIVersion is unchecked
 
 	resourceToPrefixTransformer := map[schema.GroupResource][]value.PrefixTransformer{}
 

@@ -50,7 +50,7 @@ var IdentityTransformer Transformer = identityTransformer{}
 
 func (identityTransformer) TransformFromStorage(b []byte, ctx Context) ([]byte, bool, error) {
 	// Other providers do not have k8s prefix
-	if len(b) > 0 && b[0] != '{' && !bytes.HasPrefix(b, []byte("k8s")) {
+	if len(b) > 0 && b[0] != '{' && bytes.HasPrefix(b, []byte("k8s:enc:")) {
 		return []byte{}, false, fmt.Errorf("data is not plain JSON / protobuf")
 	}
 	return b, false, nil
@@ -147,13 +147,4 @@ func (t *prefixTransformers) TransformToStorage(data []byte, context Context) ([
 	}
 	prefixedData = append(prefixedData, result...)
 	return prefixedData, nil
-}
-
-// TransformerConfig is satisfied by the structs representing the configuration API
-type TransformerConfig interface {
-	// GetPrefixTransformer creates and returns a PrefixTransformer for the transformer provided in configuration
-	GetPrefixTransformer() (PrefixTransformer, error)
-
-	// SanityCheck informs if the configuration exists, and if it had an error while parsing
-	SanityCheck() (bool, error)
 }
