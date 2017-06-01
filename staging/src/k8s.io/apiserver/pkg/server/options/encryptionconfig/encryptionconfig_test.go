@@ -17,15 +17,25 @@ limitations under the License.
 package encryptionconfig
 
 import (
+	"bytes"
 	"strings"
 	"testing"
+
+	"k8s.io/apimachinery/pkg/runtime/schema"
+	"k8s.io/apiserver/pkg/storage/value"
 )
 
-var correctConfig = `
+const (
+	sampleText = "abcdefghijklmnopqrstuvwxyz"
+
+	sampleContextText = "0123456789"
+
+	correctConfigWithIdentityFirst = `
 kind: EncryptionConfig
 apiVersion: v1
 resources:
   - resources:
+    - secrets
     - namespaces
     providers:
     - identity: {}
@@ -37,7 +47,23 @@ resources:
           secret: dGhpcyBpcyBwYXNzd29yZA==
 `
 
-var incorrectConfigNoSecretForKey = `
+	correctConfigWithAesFirst = `
+kind: EncryptionConfig
+apiVersion: v1
+resources:
+  - resources:
+    - secrets
+    providers:
+    - aes:
+        keys:
+        - name: key1
+          secret: c2VjcmV0IGlzIHNlY3VyZQ==
+        - name: key2
+          secret: dGhpcyBpcyBwYXNzd29yZA==
+    - identity: {}
+`
+
+	incorrectConfigNoSecretForKey = `
 kind: EncryptionConfig
 apiVersion: v1
 resources:
@@ -50,7 +76,7 @@ resources:
         - name: key1
 `
 
-var incorrectConfigInvalidKey = `
+	incorrectConfigInvalidKey = `
 kind: EncryptionConfig
 apiVersion: v1
 resources:
@@ -65,10 +91,90 @@ resources:
         - name: key2
           secret: YSBzZWNyZXQgYSBzZWNyZXQ=
 `
+)
 
 func TestEncryptionProviderConfigCorrect(t *testing.T) {
-	if _, err := ParseEncryptionConfiguration(strings.NewReader(correctConfig)); err != nil {
-		t.Fatalf("error while parsing configuration file: %s", err)
+	// Creates two transformers with different ordering of identity and AES transformers.
+	// Transforms data using one of them, and tries to untransform using both of them.
+	// Repeats this for both the possible combinations.
+
+	identityFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithIdentityFirst))
+	if err != nil {
+		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithIdentityFirst)
+	}
+
+	aesFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithAesFirst))
+	if err != nil {
+		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithAesFirst)
+	}
+
+	// Pick the transformer for any of the returned resources.
+	identityFirstTransformer := identityFirstTransformerOverrides[schema.ParseGroupResource("secrets")]
+	aesFirstTransformer := aesFirstTransformerOverrides[schema.ParseGroupResource("secrets")]
+
+	context := value.DefaultContext([]byte(sampleContextText))
+	originalText := []byte(sampleText)
+
+	// Transform using aes-first.
+	// Untransform using both identity-first and aes-first.
+	aesTransformedData, err := aesFirstTransformer.TransformToStorage(originalText, context)
+	if err != nil {
+		t.Fatalf("error while transforming data to storage using AES transformer: %s", err)
+	}
+
+	aesUntransformedData, stale, err := aesFirstTransformer.TransformFromStorage(aesTransformedData, context)
+	if err != nil {
+		t.Fatalf("error while transforming data written by AES, from storage using AES transformer: %s", err)
+	}
+	if stale != false {
+		t.Fatalf("wrong stale information on using transformer with AES first, on data encrypted by identity. Should be false for AES transformer reads")
+	}
+
+	identityUntransformedData, stale, err := identityFirstTransformer.TransformFromStorage(aesTransformedData, context)
+	if err != nil {
+		t.Fatalf("error while transforming data written by AES, from storage, using identity: %s", err)
+	}
+	if stale != true {
+		t.Fatalf("wrong stale information on using transformer with AES first, on data encrypted by aes. Should be true for identity transformer reads")
+	}
+
+	if bytes.Compare(aesUntransformedData, originalText) != 0 {
+		t.Fatalf("aes-first transformer transformed data (written by aes-first) incorrectly. Expected: %v, got %v", originalText, aesUntransformedData)
+	}
+
+	if bytes.Compare(identityUntransformedData, originalText) != 0 {
+		t.Fatalf("identity-first transformer transformed data (written by aes-first) incorrectly. Expected: %v, got %v", originalText, aesUntransformedData)
+	}
+
+	// Transform using identity-first.
+	// Untransform using both identity-first and aes-first.
+	identityTransformedData, err := identityFirstTransformer.TransformToStorage(originalText, context)
+	if err != nil {
+		t.Fatalf("error while transforming data to storage using AES transformer: %s", err)
+	}
+
+	aesUntransformedData, stale, err = aesFirstTransformer.TransformFromStorage(identityTransformedData, context)
+	if err != nil {
+		t.Fatalf("error while transforming data written by identity, from storage using AES transformer: %s", err)
+	}
+	if stale != true {
+		t.Fatalf("wrong stale information on using transformer with AES first, on data encrypted by identity. Should be true for AES transformer reads")
+	}
+
+	identityUntransformedData, stale, err = identityFirstTransformer.TransformFromStorage(identityTransformedData, context)
+	if err != nil {
+		t.Fatalf("error while transforming data written by identity, from storage, using identity: %s", err)
+	}
+	if stale != false {
+		t.Fatalf("wrong stale information on using transformer with AES first, on data encrypted by identity. Should be false for identity transformer reads")
+	}
+
+	if bytes.Compare(aesUntransformedData, originalText) != 0 {
+		t.Fatalf("aes-first transformer transformed data (written by identity-first) incorrectly. Expected: %v, got %v", originalText, aesUntransformedData)
+	}
+
+	if bytes.Compare(identityUntransformedData, originalText) != 0 {
+		t.Fatalf("identity-first transformer transformed data (written by identity-first) incorrectly. Expected: %v, got %v", originalText, aesUntransformedData)
 	}
 }
 
