@@ -115,66 +115,45 @@ func TestEncryptionProviderConfigCorrect(t *testing.T) {
 	context := value.DefaultContext([]byte(sampleContextText))
 	originalText := []byte(sampleText)
 
-	// Transform using aes-first.
-	// Untransform using both identity-first and aes-first.
-	aesTransformedData, err := aesFirstTransformer.TransformToStorage(originalText, context)
-	if err != nil {
-		t.Fatalf("error while transforming data to storage using AES transformer: %s", err)
+	testCases := []struct {
+		WritingTransformer value.Transformer
+		Name               string
+		AesStale           bool
+		IdentityStale      bool
+	}{
+		{aesFirstTransformer, "aesFirst", false, true},
+		{identityFirstTransformer, "identityFirst", true, false},
 	}
 
-	aesUntransformedData, stale, err := aesFirstTransformer.TransformFromStorage(aesTransformedData, context)
-	if err != nil {
-		t.Fatalf("error while transforming data written by AES, from storage using AES transformer: %s", err)
-	}
-	if stale != false {
-		t.Fatalf("wrong stale information on using transformer with AES first, on data encrypted by identity. Should be false for AES transformer reads")
-	}
+	for _, testCase := range testCases {
+		transformedData, err := testCase.WritingTransformer.TransformToStorage(originalText, context)
+		if err != nil {
+			t.Fatalf("%s: error while transforming data to storage: %s", testCase.Name, err)
+		}
 
-	identityUntransformedData, stale, err := identityFirstTransformer.TransformFromStorage(aesTransformedData, context)
-	if err != nil {
-		t.Fatalf("error while transforming data written by AES, from storage, using identity: %s", err)
-	}
-	if stale != true {
-		t.Fatalf("wrong stale information on using transformer with AES first, on data encrypted by aes. Should be true for identity transformer reads")
-	}
+		aesUntransformedData, stale, err := aesFirstTransformer.TransformFromStorage(transformedData, context)
+		if err != nil {
+			t.Fatalf("%s: error while reading using aesFirst transformer: %s", testCase.Name, err)
+		}
+		if stale != testCase.AesStale {
+			t.Fatalf("%s: wrong stale information on reading using aesFirst transformer, should be %v", testCase.Name, testCase.AesStale)
+		}
 
-	if bytes.Compare(aesUntransformedData, originalText) != 0 {
-		t.Fatalf("aes-first transformer transformed data (written by aes-first) incorrectly. Expected: %v, got %v", originalText, aesUntransformedData)
-	}
+		identityUntransformedData, stale, err := identityFirstTransformer.TransformFromStorage(transformedData, context)
+		if err != nil {
+			t.Fatalf("%s: error while reading using identityFirst transformer: %s", testCase.Name, err)
+		}
+		if stale != testCase.IdentityStale {
+			t.Fatalf("%s: wrong stale information on reading using identityFirst transformer, should be %v", testCase.Name, testCase.IdentityStale)
+		}
 
-	if bytes.Compare(identityUntransformedData, originalText) != 0 {
-		t.Fatalf("identity-first transformer transformed data (written by aes-first) incorrectly. Expected: %v, got %v", originalText, aesUntransformedData)
-	}
+		if bytes.Compare(aesUntransformedData, originalText) != 0 {
+			t.Fatalf("%s: aesFirst transformer transformed data incorrectly. Expected: %v, got %v", testCase.Name, originalText, aesUntransformedData)
+		}
 
-	// Transform using identity-first.
-	// Untransform using both identity-first and aes-first.
-	identityTransformedData, err := identityFirstTransformer.TransformToStorage(originalText, context)
-	if err != nil {
-		t.Fatalf("error while transforming data to storage using AES transformer: %s", err)
-	}
-
-	aesUntransformedData, stale, err = aesFirstTransformer.TransformFromStorage(identityTransformedData, context)
-	if err != nil {
-		t.Fatalf("error while transforming data written by identity, from storage using AES transformer: %s", err)
-	}
-	if stale != true {
-		t.Fatalf("wrong stale information on using transformer with AES first, on data encrypted by identity. Should be true for AES transformer reads")
-	}
-
-	identityUntransformedData, stale, err = identityFirstTransformer.TransformFromStorage(identityTransformedData, context)
-	if err != nil {
-		t.Fatalf("error while transforming data written by identity, from storage, using identity: %s", err)
-	}
-	if stale != false {
-		t.Fatalf("wrong stale information on using transformer with AES first, on data encrypted by identity. Should be false for identity transformer reads")
-	}
-
-	if bytes.Compare(aesUntransformedData, originalText) != 0 {
-		t.Fatalf("aes-first transformer transformed data (written by identity-first) incorrectly. Expected: %v, got %v", originalText, aesUntransformedData)
-	}
-
-	if bytes.Compare(identityUntransformedData, originalText) != 0 {
-		t.Fatalf("identity-first transformer transformed data (written by identity-first) incorrectly. Expected: %v, got %v", originalText, aesUntransformedData)
+		if bytes.Compare(identityUntransformedData, originalText) != 0 {
+			t.Fatalf("%s: identityFirst transformer transformed data incorrectly. Expected: %v, got %v", testCase.Name, originalText, aesUntransformedData)
+		}
 	}
 }
 
