@@ -45,6 +45,11 @@ resources:
           secret: c2VjcmV0IGlzIHNlY3VyZQ==
         - name: key2
           secret: dGhpcyBpcyBwYXNzd29yZA==
+    - gkms:
+        projectID: test-project
+        location: global
+        keyRing: testkey
+        cryptoKey: testcrypto
 `
 
 	correctConfigWithAesFirst = `

@@ -29,11 +29,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
 	aestransformer "k8s.io/apiserver/pkg/storage/value/encrypt/aes"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/gkms"
 	"k8s.io/apiserver/pkg/storage/value/encrypt/identity"
 )
 
 const (
-	aesTransformerPrefixV1 = "k8s:enc:aes:v1:"
+	aesTransformerPrefixV1  = "k8s:enc:aes:v1:"
+	gkmsTransformerPrefixV1 = "k8s:enc:gkms-raw:v1:"
 )
 
 // GetTransformerOverrides returns the transformer overrides by reading and parsing the encryption provider configuration file
@@ -119,6 +121,21 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 			result = append(result, value.PrefixTransformer{
 				Transformer: identity.NewEncryptCheckTransformer(),
 				Prefix:      []byte{},
+			})
+		}
+
+		if provider.Gkms != nil {
+			if found == true {
+				return result, fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
+			}
+			found = true
+			transformer, err := gkms.NewGoogleKMSTransformer(provider.Gkms.ProjectID, provider.Gkms.Location, provider.Gkms.KeyRing, provider.Gkms.CryptoKey)
+			if err != nil {
+				return result, err
+			}
+			result = append(result, value.PrefixTransformer{
+				Transformer: transformer,
+				Prefix:      []byte(gkmsTransformerPrefixV1),
 			})
 		}
 

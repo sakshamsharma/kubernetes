@@ -1,0 +1,18 @@
+kind: EncryptionConfig
+apiVersion: v1
+resources:
+  - resources:
+    - namespaces
+    providers:
+    - kms:
+        projectID: sakshams-gke-dev
+        location: global
+        keyRing: test
+        cryptoKey: quickstart
+    - identity: {}
+    - aes:
+        keys:
+        - name: key1
+          secret: c2VjcmV0IGlzIHNlY3VyZQ==
+        - name: key2
+          secret: dGhpcyBpcyBwYXNzd29yZA==
