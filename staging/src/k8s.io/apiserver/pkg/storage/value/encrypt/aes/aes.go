@@ -58,6 +58,7 @@ func (t *gcm) TransformFromStorage(data []byte, context value.Context) ([]byte, 
 		return nil, false, fmt.Errorf("the stored data was shorter than the required size")
 	}
 	result, err := aead.Open(nil, data[:nonceSize], data[nonceSize:], context.AuthenticatedData())
+	fmt.Println("YAAY FROM Storage: " + string(context.AuthenticatedData()))
 	return result, false, err
 }
 
@@ -76,5 +77,6 @@ func (t *gcm) TransformToStorage(data []byte, context value.Context) ([]byte, er
 		return nil, fmt.Errorf("unable to read sufficient random bytes")
 	}
 	cipherText := aead.Seal(result[nonceSize:nonceSize], result[:nonceSize], data, context.AuthenticatedData())
+	fmt.Println("YAAY TO Storage: " + string(context.AuthenticatedData()))
 	return result[:nonceSize+len(cipherText)], nil
 }
