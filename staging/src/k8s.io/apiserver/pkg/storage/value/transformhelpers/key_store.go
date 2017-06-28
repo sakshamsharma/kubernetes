@@ -17,8 +17,9 @@ limitations under the License.
 package transformhelpers
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"strings"
-	"sync"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -42,7 +43,7 @@ const (
 
 type keyStore struct {
 	configmaps configmap.Registry
-	lock       sync.RWMutex
+	name       string
 }
 
 // NewKeyStore returns a KMSStorage instance which uses etcd to store KMS specific information as a configmap,
@@ -56,8 +57,12 @@ func NewKeyStore(config *storagebackend.Config, dekPrefix string) value.KMSStora
 }
 
 // Setup creates the empty configmap on disk if it did not already exist.
-func (p *keyStore) Setup() error {
+func (p *keyStore) Setup(name string) error {
 	ctx := genericapirequest.NewDefaultContext()
+
+	// name may contain extra characters which are not allowed.
+	// Regex used for validation is '[a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*')
+	p.name = dekMapName + "-" + hash(name)
 
 	_, err := p.GetAllDEKs()
 	// TODO(sakshams): Should we do this if err is 404, or should we do this as long as err is not nil?
@@ -65,7 +70,7 @@ func (p *keyStore) Setup() error {
 		// We need to create the configmap
 		cfg := &api.ConfigMap{
 			ObjectMeta: metav1.ObjectMeta{
-				Name:      dekMapName,
+				Name:      p.name,
 				Namespace: metav1.NamespaceDefault,
 			},
 			Data: map[string]string{},
@@ -82,7 +87,7 @@ func (p *keyStore) Setup() error {
 // GetAllDEKs reads and returns all available DEKs from etcd as a map.
 func (p *keyStore) GetAllDEKs() (map[string]string, error) {
 	ctx := genericapirequest.NewDefaultContext()
-	cfg, err := p.configmaps.GetConfigMap(ctx, dekMapName, &metav1.GetOptions{})
+	cfg, err := p.configmaps.GetConfigMap(ctx, p.name, &metav1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -91,13 +96,10 @@ func (p *keyStore) GetAllDEKs() (map[string]string, error) {
 
 // StoreNewDEKs writes the provided DEKs to disk.
 func (p *keyStore) StoreNewDEK(encDEK string) error {
-	// This function is invoked only by Rotate() calls, which are already lock protected.
-	// TODO(sakshams): Investigate if locks are really needed here.
-	p.lock.Lock()
-	defer p.lock.Unlock()
-
 	ctx := genericapirequest.NewDefaultContext()
-	cfg, err := p.configmaps.GetConfigMap(ctx, dekMapName, &metav1.GetOptions{})
+
+	// Obtain existing configmap for sanity check.
+	cfg, err := p.configmaps.GetConfigMap(ctx, p.name, &metav1.GetOptions{})
 	if err != nil {
 		return err
 	}
@@ -125,6 +127,8 @@ func (p *keyStore) StoreNewDEK(encDEK string) error {
 	return err
 }
 
+var _ value.KMSStorage = &keyStore{}
+
 // GenerateName generates a unique new name for a DEK. Exposed for running encryptionconfig_test.
 func GenerateName(existingNames map[string]string) string {
 	name := randutil.String(keyNameLength)
@@ -136,4 +140,11 @@ func GenerateName(existingNames map[string]string) string {
 	}
 
 	return name
+}
+
+// hash returns the hex encoded SHA5-sum of input string.
+func hash(s string) string {
+	hasher := sha256.New()
+	hasher.Write([]byte(s))
+	return hex.EncodeToString(hasher.Sum(nil))
 }
