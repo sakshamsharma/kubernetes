@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"strings"
 	"sync"
+	"time"
 
 	"k8s.io/apiserver/pkg/storage/value"
 	aestransformer "k8s.io/apiserver/pkg/storage/value/encrypt/aes"
@@ -64,6 +65,9 @@ func NewKMSTransformer(kmsService value.KMSService, storage value.KMSStorage) (v
 	} else {
 		transformer.Refresh()
 	}
+
+	// Set up a service to refresh the keys by reading from disk.
+	go transformer.refreshService()
 
 	return transformer, nil
 }
@@ -178,6 +182,14 @@ func (t *kmsTransformer) TransformToStorage(data []byte, context value.Context) 
 	}
 	prefixedData = append(prefixedData, result...)
 	return prefixedData, nil
+}
+
+// refreshService refreshes the keys by reading from disk every hour.
+func (t *kmsTransformer) refreshService() {
+	for true {
+		time.Sleep(time.Hour)
+		t.Refresh()
+	}
 }
 
 // generateKey generates a random key using system randomness.
