@@ -18,11 +18,14 @@ package encryptionconfig
 
 import (
 	"bytes"
+	"encoding/base64"
+	"fmt"
 	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/kms"
 )
 
 const (
@@ -165,27 +168,54 @@ resources:
 `
 )
 
+type testKMSService struct {
+	disabled bool
+}
+
+func (t *testKMSService) Decrypt(data string) ([]byte, error) {
+	if t.disabled {
+		return []byte{}, fmt.Errorf("KMS service was disabled")
+	}
+	return base64.StdEncoding.DecodeString(data)
+}
+
+func (t *testKMSService) Encrypt(data []byte) (string, error) {
+	if t.disabled {
+		return "", fmt.Errorf("KMS service was disabled")
+	}
+	return base64.StdEncoding.EncodeToString(data), nil
+}
+
+func (t *testKMSService) SetDisabledStatus(status bool) {
+	t.disabled = status
+}
+
+var _ value.KMSService = &testKMSService{}
+
 func TestEncryptionProviderConfigCorrect(t *testing.T) {
 	// Creates two transformers with different ordering of identity and AES transformers.
 	// Transforms data using one of them, and tries to untransform using both of them.
 	// Repeats this for both the possible combinations.
+	kmsService := &testKMSService{}
+	// Create a mock kmsFactory
+	kmsFactory := kms.NewFactoryWithService(kmsService)
 
-	identityFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithIdentityFirst))
+	identityFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithIdentityFirst), kmsFactory)
 	if err != nil {
 		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithIdentityFirst)
 	}
 
-	aesGcmFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithAesGcmFirst))
+	aesGcmFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithAesGcmFirst), kmsFactory)
 	if err != nil {
 		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithAesGcmFirst)
 	}
 
-	aesCbcFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithAesCbcFirst))
+	aesCbcFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithAesCbcFirst), kmsFactory)
 	if err != nil {
 		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithAesCbcFirst)
 	}
 
-	secretboxFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithSecretboxFirst))
+	secretboxFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithSecretboxFirst), kmsFactory)
 	if err != nil {
 		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithSecretboxFirst)
 	}
@@ -233,14 +263,14 @@ func TestEncryptionProviderConfigCorrect(t *testing.T) {
 
 // Throw error if key has no secret
 func TestEncryptionProviderConfigNoSecretForKey(t *testing.T) {
-	if _, err := ParseEncryptionConfiguration(strings.NewReader(incorrectConfigNoSecretForKey)); err == nil {
+	if _, err := ParseEncryptionConfiguration(strings.NewReader(incorrectConfigNoSecretForKey), nil); err == nil {
 		t.Fatalf("invalid configuration file (one key has no secret) got parsed:\n%s", incorrectConfigNoSecretForKey)
 	}
 }
 
 // Throw error if invalid key for AES
 func TestEncryptionProviderConfigInvalidKey(t *testing.T) {
-	if _, err := ParseEncryptionConfiguration(strings.NewReader(incorrectConfigInvalidKey)); err == nil {
+	if _, err := ParseEncryptionConfiguration(strings.NewReader(incorrectConfigInvalidKey), nil); err == nil {
 		t.Fatalf("invalid configuration file (bad AES key) got parsed:\n%s", incorrectConfigInvalidKey)
 	}
 }
