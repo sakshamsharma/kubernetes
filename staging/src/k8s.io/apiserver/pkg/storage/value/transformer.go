@@ -32,6 +32,14 @@ type Context interface {
 	AuthenticatedData() []byte
 }
 
+// KMSService allows encrypting and decrypting data using an external Key Management Service.
+type KMSService interface {
+	// Decrypt a given data string to obtain the original byte data.
+	Decrypt(data string) ([]byte, error)
+	// Encrypt bytes to a string ciphertext.
+	Encrypt(data []byte) (string, error)
+}
+
 // Transformer allows a value to be transformed before being read from or written to the underlying store. The methods
 // must be able to undo the transformation caused by the other.
 type Transformer interface {
