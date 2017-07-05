@@ -32,6 +32,15 @@ type Context interface {
 	AuthenticatedData() []byte
 }
 
+// KMSService allows encrypting and decrypting secrets using an external service, which provides a
+// Key-Encryption-Key (KEK). This is needed to implement envelope encryption based transformers.
+type KMSService interface {
+	// Decrypt a given data string using KEK.
+	Decrypt(data string) ([]byte, error)
+	// Encrypte bytes using KEK.
+	Encrypt(data []byte) (string, error)
+}
+
 // Transformer allows a value to be transformed before being read from or written to the underlying store. The methods
 // must be able to undo the transformation caused by the other.
 type Transformer interface {
