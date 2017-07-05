@@ -45,6 +45,8 @@ type ProviderConfig struct {
 	Secretbox *SecretboxConfig `json:"secretbox,omitempty"`
 	// identity is the (empty) configuration for the identity transformer.
 	Identity *IdentityConfig `json:"identity,omitempty"`
+	// gkms is the configuration for the Google Cloud KMS based transformer.
+	Gkms *GKMSConfig `json:"gkms,omitempty"`
 }
 
 // AESConfig contains the API configuration for an AES transformer.
@@ -53,7 +55,7 @@ type AESConfig struct {
 	Keys []Key `json:"keys"`
 }
 
-// SECRETBOXConfig contains the API configuration for an Secretbox transformer.
+// SecretboxConfig contains the API configuration for an Secretbox transformer.
 type SecretboxConfig struct {
 	// keys is a list of keys to be used for creating the Secretbox transformer.
 	Keys []Key `json:"keys"`
@@ -65,6 +67,26 @@ type Key struct {
 	Name string `json:"name"`
 	// secret is the actual AES key, encoded in base64. It has to be 16, 24 or 32 bytes long.
 	Secret string `json:"secret"`
+}
+
+// GKMSConfig contains API configuration for Google KMS transformer.
+type GKMSConfig struct {
+	// projectID is the GCP project which hosts the key to be used. It defaults to the GCP project
+	// in use, if you are running on Kubernetes on GKE/GCE. Setting this field will override
+	// the default. It is not optional if Kubernetes is not on GKE/GCE.
+	// +optional
+	ProjectID string `json:"projectID,omitempty"`
+	// location is the location of the KeyRing to be used for encryption. The default value is "global".
+	// +optional
+	Location string `json:"location,omitempty"`
+	// keyRing is the keyRing of the hosted key to be used. The default value is "google-kubernetes".
+	// +optional
+	KeyRing string `json:"keyRing,omitempty"`
+	// cryptoKey is the name of the key to be used for encryption of Data-Encryption-Keys.
+	CryptoKey string `json:"cryptoKey,omitempty"`
+	// cacheSize is the maximum number of secrets which are cached in memory. The default value is 1000.
+	// +optional
+	CacheSize int `json:"cacheSize,omitempty"`
 }
 
 // IdentityConfig is an empty struct to allow identity transformer in provider configuration.

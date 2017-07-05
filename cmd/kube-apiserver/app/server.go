@@ -20,6 +20,7 @@ limitations under the License.
 package app
 
 import (
+	"context"
 	"crypto/tls"
 	"fmt"
 	"io/ioutil"
@@ -31,6 +32,9 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"golang.org/x/oauth2/google"
+	cloudkms "google.golang.org/api/cloudkms/v1"
 
 	"github.com/go-openapi/spec"
 	"github.com/golang/glog"
@@ -51,7 +55,9 @@ import (
 	"k8s.io/apiserver/pkg/server/filters"
 	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/kms"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
+	"k8s.io/kubernetes/pkg/cloudprovider/providers/gce"
 	//aggregatorinformers "k8s.io/kube-aggregator/pkg/client/informers/internalversion"
 
 	clientgoinformers "k8s.io/client-go/informers"
@@ -579,7 +585,51 @@ func BuildStorageFactory(s *options.ServerRunOptions) (*serverstorage.DefaultSto
 	}
 
 	if s.Etcd.EncryptionProviderConfigFilepath != "" {
-		transformerOverrides, err := encryptionconfig.GetTransformerOverrides(s.Etcd.EncryptionProviderConfigFilepath)
+		// Obtain GCE cloud for a Google Cloud KMS connection if needed.
+		// cloudproviders package is in the main kubernetes directory, and thus we cannot access
+		// the gce package (sub-package of cloudproviders) from inside the staging directory.
+		// We need to be able to create a gce cloud object inside the staging directory. Thus, for now,
+		// we pass a function which does that, from here.
+		// If cloudproviders package is moved to a new location, move the logic of this function to kms.Factory.
+		getGCECloud := func() (*kms.GCECloud, error) {
+			cloud, err := cloudprovider.InitCloudProvider(s.CloudProvider.CloudProvider, s.CloudProvider.CloudConfigFile)
+			if err != nil {
+				return nil, err
+			}
+
+			var cloudkmsService *cloudkms.Service
+			var projectID string
+
+			// This check is false if cloud is nil, or is not an instance of gce.GCECloud.
+			if gke, ok := cloud.(*gce.GCECloud); ok {
+				// Hosting on GCE/GKE with Google KMS encryption provider
+				cloudkmsService = gke.GetKMSService()
+
+				// Project ID is assumed to be the user's project unless there
+				// is an override in the configuration file. If there is an override,
+				// it will be taken into account by the Google KMS service constructor,
+				// after reading the configuration file.
+				projectID = gke.ProjectID()
+			} else {
+				// Outside GCE/GKE. Requires GOOGLE_APPLICATION_CREDENTIALS environment variable.
+				// This describes how that can be done:
+				// https://developers.google.com/identity/protocols/application-default-credentials
+				ctx := context.Background()
+				client, err := google.DefaultClient(ctx, cloudkms.CloudPlatformScope)
+				if err != nil {
+					return nil, err
+				}
+				cloudkmsService, err = cloudkms.New(client)
+				if err != nil {
+					return nil, err
+				}
+				projectID = ""
+			}
+			return &kms.GCECloud{cloudkmsService, projectID}, nil
+		}
+
+		transformerOverrides, err := encryptionconfig.GetTransformerOverrides(
+			s.Etcd.EncryptionProviderConfigFilepath, kms.NewFactory(getGCECloud))
 		if err != nil {
 			return nil, err
 		}
