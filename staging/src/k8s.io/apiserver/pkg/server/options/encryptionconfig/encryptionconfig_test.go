@@ -20,6 +20,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -32,6 +33,9 @@ const (
 	sampleText = "abcdefghijklmnopqrstuvwxyz"
 
 	sampleContextText = "0123456789"
+
+	// On change, also modify correctConfigWithKMSFirst
+	testKMSCacheSize = 10
 
 	correctConfigWithIdentityFirst = `
 kind: EncryptionConfig
@@ -54,6 +58,13 @@ resources:
           secret: c2VjcmV0IGlzIHNlY3VyZQ==
         - name: key2
           secret: dGhpcyBpcyBwYXNzd29yZA==
+    - kms:
+        kind: google-cloudkms
+        apiVersion: v1
+        config:
+          projectID: sakshams-gke-dev
+          keyRing: google-kubernetes
+          cryptoKey: encryption-provider
     - secretbox:
         keys:
         - name: key1
@@ -73,6 +84,13 @@ resources:
           secret: c2VjcmV0IGlzIHNlY3VyZQ==
         - name: key2
           secret: dGhpcyBpcyBwYXNzd29yZA==
+    - kms:
+        kind: google-cloudkms
+        apiVersion: v1
+        config:
+          projectID: sakshams-gke-dev
+          keyRing: google-kubernetes
+          cryptoKey: encryption-provider
     - secretbox:
         keys:
         - name: key1
@@ -99,6 +117,13 @@ resources:
           secret: c2VjcmV0IGlzIHNlY3VyZQ==
         - name: key2
           secret: dGhpcyBpcyBwYXNzd29yZA==
+    - kms:
+        kind: google-cloudkms
+        apiVersion: v1
+        config:
+          projectID: sakshams-gke-dev
+          keyRing: google-kubernetes
+          cryptoKey: encryption-provider
     - identity: {}
     - secretbox:
         keys:
@@ -129,6 +154,13 @@ resources:
           secret: c2VjcmV0IGlzIHNlY3VyZQ==
         - name: key2
           secret: dGhpcyBpcyBwYXNzd29yZA==
+    - kms:
+        kind: google-cloudkms
+        apiVersion: v1
+        config:
+          projectID: sakshams-gke-dev
+          keyRing: google-kubernetes
+          cryptoKey: encryption-provider
     - identity: {}
     - aesgcm:
         keys:
@@ -136,6 +168,40 @@ resources:
           secret: c2VjcmV0IGlzIHNlY3VyZQ==
         - name: key2
           secret: dGhpcyBpcyBwYXNzd29yZA==
+`
+
+	correctConfigWithKMSFirst = `
+kind: EncryptionConfig
+apiVersion: v1
+resources:
+  - resources:
+    - secrets
+    - namespaces
+    providers:
+    - kms:
+        kind: google-cloudkms
+        apiVersion: v1
+        config:
+          projectID: sakshams-gke-dev
+          keyRing: google-kubernetes
+          cryptoKey: encryption-provider
+    - aesgcm:
+        keys:
+        - name: key1
+          secret: c2VjcmV0IGlzIHNlY3VyZQ==
+        - name: key2
+          secret: dGhpcyBpcyBwYXNzd29yZA==
+    - identity: {}
+    - aescbc:
+        keys:
+        - name: key1
+          secret: c2VjcmV0IGlzIHNlY3VyZQ==
+        - name: key2
+          secret: dGhpcyBpcyBwYXNzd29yZA==
+    - secretbox:
+        keys:
+        - name: key1
+          secret: YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=
 `
 
 	incorrectConfigNoSecretForKey = `
@@ -231,11 +297,17 @@ func TestEncryptionProviderConfigCorrect(t *testing.T) {
 		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithSecretboxFirst)
 	}
 
+	kmsFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithKMSFirst), serviceGetter)
+	if err != nil {
+		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithKMSFirst)
+	}
+
 	// Pick the transformer for any of the returned resources.
 	identityFirstTransformer := identityFirstTransformerOverrides[schema.ParseGroupResource("secrets")]
 	aesGcmFirstTransformer := aesGcmFirstTransformerOverrides[schema.ParseGroupResource("secrets")]
 	aesCbcFirstTransformer := aesCbcFirstTransformerOverrides[schema.ParseGroupResource("secrets")]
 	secretboxFirstTransformer := secretboxFirstTransformerOverrides[schema.ParseGroupResource("secrets")]
+	kmsFirstTransformer := kmsFirstTransformerOverrides[schema.ParseGroupResource("secrets")]
 
 	context := value.DefaultContext([]byte(sampleContextText))
 	originalText := []byte(sampleText)
@@ -248,6 +320,7 @@ func TestEncryptionProviderConfigCorrect(t *testing.T) {
 		{aesCbcFirstTransformer, "aesCbcFirst"},
 		{secretboxFirstTransformer, "secretboxFirst"},
 		{identityFirstTransformer, "identityFirst"},
+		{kmsFirstTransformer, "kmsFirst"},
 	}
 
 	for _, testCase := range transformers {
@@ -283,5 +356,87 @@ func TestEncryptionProviderConfigNoSecretForKey(t *testing.T) {
 func TestEncryptionProviderConfigInvalidKey(t *testing.T) {
 	if _, err := ParseEncryptionConfiguration(strings.NewReader(incorrectConfigInvalidKey), nil); err == nil {
 		t.Fatalf("invalid configuration file (bad AES key) got parsed:\n%s", incorrectConfigInvalidKey)
+	}
+}
+
+// Throw error if KMS transformer tries to contact KMS without hitting cache.
+func TestKMSCaching(t *testing.T) {
+	kmsService := &testKMSService{}
+	serviceGetter := func(_ string, _ map[string]interface{}) (kms.Service, error) {
+		return kmsService, nil
+	}
+
+	kmsFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithKMSFirst), serviceGetter)
+	if err != nil {
+		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithKMSFirst)
+	}
+
+	kmsTransformer := kmsFirstTransformerOverrides[schema.ParseGroupResource("secrets")]
+	context := value.DefaultContext([]byte(sampleContextText))
+	originalText := []byte(sampleText)
+
+	transformedData, err := kmsTransformer.TransformToStorage(originalText, context)
+	if err != nil {
+		t.Fatalf("kmsTransformer: error while transforming data to storage: %s", err)
+	}
+	untransformedData, _, err := kmsTransformer.TransformFromStorage(transformedData, context)
+	if err != nil {
+		t.Fatalf("could not decrypt KMS transformer's encrypted data even once: %v", err)
+	}
+	if bytes.Compare(untransformedData, originalText) != 0 {
+		t.Fatalf("kmsTransformer transformed data incorrectly. Expected: %v, got %v", originalText, untransformedData)
+	}
+
+	kmsService.SetDisabledStatus(true)
+	// Subsequent read for the same data should work fine due to caching.
+	untransformedData, _, err = kmsTransformer.TransformFromStorage(transformedData, context)
+	if err != nil {
+		t.Fatalf("could not decrypt KMS transformer's encrypted data using just cache: %v", err)
+	}
+	if bytes.Compare(untransformedData, originalText) != 0 {
+		t.Fatalf("kmsTransformer transformed data incorrectly using cache. Expected: %v, got %v", originalText, untransformedData)
+	}
+}
+
+// Makes KMS transformer hit cache limit, throws error if it misbehaves.
+func TestKMSCacheLimit(t *testing.T) {
+	kmsService := &testKMSService{}
+	serviceGetter := func(_ string, _ map[string]interface{}) (kms.Service, error) {
+		return kmsService, nil
+	}
+
+	kmsFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithKMSFirst), serviceGetter)
+	if err != nil {
+		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithKMSFirst)
+	}
+
+	kmsTransformer := kmsFirstTransformerOverrides[schema.ParseGroupResource("secrets")]
+	context := value.DefaultContext([]byte(sampleContextText))
+
+	transformedOutputs := map[int][]byte{}
+
+	// Overwrite lots of entries in the map
+	for i := 0; i < 2*testKMSCacheSize; i++ {
+		numberText := []byte(strconv.Itoa(i))
+
+		res, err := kmsTransformer.TransformToStorage(numberText, context)
+		transformedOutputs[i] = res
+		if err != nil {
+			t.Fatalf("kmsTransformer: error while transforming data (%v) to storage: %s", numberText, err)
+		}
+	}
+
+	// Try reading all the data now, ensuring cache misses don't cause a concern.
+	for i := 0; i < 2*testKMSCacheSize; i++ {
+		numberText := []byte(strconv.Itoa(i))
+
+		output, _, err := kmsTransformer.TransformFromStorage(transformedOutputs[i], context)
+		if err != nil {
+			t.Fatalf("kmsTransformer: error while transforming data (%v) from storage: %s", transformedOutputs[i], err)
+		}
+
+		if bytes.Compare(numberText, output) != 0 {
+			t.Fatalf("kmsTransformer transformed data incorrectly using cache. Expected: %v, got %v", numberText, output)
+		}
 	}
 }
