@@ -17,8 +17,6 @@ limitations under the License.
 package kms
 
 import (
-	"fmt"
-
 	"k8s.io/apiserver/pkg/storage/value"
 )
 
@@ -63,6 +61,5 @@ func (kmsFactory *Factory) GetGoogleKMSTransformer(projectID, location, keyRing,
 	if cacheSize == 0 {
 		cacheSize = 1000
 	}
-	// return NewKMSTransformer(gkmsService, cacheSize)
-	return nil, fmt.Errorf("not yet implemented")
+	return NewKMSTransformer(gkmsService, cacheSize)
 }
