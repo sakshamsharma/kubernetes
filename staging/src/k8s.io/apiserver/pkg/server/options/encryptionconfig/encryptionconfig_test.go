@@ -192,7 +192,7 @@ func (t *testKMSService) SetDisabledStatus(status bool) {
 	t.disabled = status
 }
 
-var _ value.KMSService = &testKMSService{}
+var _ kms.Service = &testKMSService{}
 
 func TestEncryptionProviderConfigCorrect(t *testing.T) {
 	kmsService := &testKMSService{}

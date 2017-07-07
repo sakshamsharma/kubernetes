@@ -76,7 +76,9 @@ type GKMSConfig struct {
 	// the default. It is not optional if Kubernetes is not on GKE/GCE.
 	// +optional
 	ProjectID string `json:"projectID,omitempty"`
-	// location is the location of the KeyRing to be used for encryption. The default value is "global".
+	// location is the KMS location of the KeyRing to be used for encryption. The default value is "global".
+	// It can be found by checking the available KeyRings in the IAM UI.
+	// This is not the same as the GCP location of the project.
 	// +optional
 	Location string `json:"location,omitempty"`
 	// keyRing is the keyRing of the hosted key to be used. The default value is "google-kubernetes".

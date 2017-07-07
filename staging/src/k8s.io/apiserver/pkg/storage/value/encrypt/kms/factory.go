@@ -26,7 +26,7 @@ type Factory struct {
 	cloudName      string
 	configFilePath string
 
-	gkmsServiceOverride value.KMSService
+	gkmsServiceOverride Service
 }
 
 // NewFactory returns a Factory instance which can create KMS based transformers.
@@ -39,7 +39,7 @@ func NewFactory(name, configFilePath string) *Factory {
 
 // NewFactoryWithGoogleService returns a Factory instance which always uses the provided
 // Google Cloud KMS service. Used for running unit tests.
-func NewFactoryWithGoogleService(gkmsService value.KMSService) *Factory {
+func NewFactoryWithGoogleService(gkmsService Service) *Factory {
 	return &Factory{
 		gkmsServiceOverride: gkmsService,
 	}
@@ -50,7 +50,7 @@ func NewFactoryWithGoogleService(gkmsService value.KMSService) *Factory {
 func (kmsFactory *Factory) GetGoogleKMSTransformer(projectID, location, keyRing, cryptoKey string, cacheSize int) (value.Transformer, error) {
 	gkmsService := kmsFactory.gkmsServiceOverride
 	if gkmsService == nil {
-		cloud, err := google.InitGoogleCloudkmsService(kmsFactory.cloudName, kmsFactory.configFilePath)
+		cloud, err := google.InitCloudkmsService(kmsFactory.cloudName, kmsFactory.configFilePath)
 		if err != nil {
 			return nil, err
 		}

@@ -26,8 +26,16 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
+// Service allows encrypting and decrypting data using an external Key Management Service.
+type Service interface {
+	// Decrypt a given data string to obtain the original byte data.
+	Decrypt(data string) ([]byte, error)
+	// Encrypt bytes to a string ciphertext.
+	Encrypt(data []byte) (string, error)
+}
+
 type kmsTransformer struct {
-	kmsService   value.KMSService
+	kmsService   Service
 	transformers *lru.Cache
 
 	// cacheSize is the maximum number of DEKs that are cached.
@@ -38,6 +46,6 @@ type kmsTransformer struct {
 
 // NewKMSTransformer returns a transformer which implements a KEK-DEK based envelope encryption scheme.
 // It uses kmsService to communicate with the KEK store, and storage to communicate with the DEK store.
-func NewKMSTransformer(kmsService value.KMSService, cacheSize int) (value.Transformer, error) {
+func NewKMSTransformer(kmsService Service, cacheSize int) (value.Transformer, error) {
 	return nil, fmt.Errorf("not yet implemented")
 }
