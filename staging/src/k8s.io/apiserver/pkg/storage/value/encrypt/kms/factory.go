@@ -18,20 +18,22 @@ package kms
 
 import (
 	"k8s.io/apiserver/pkg/storage/value"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/kms/google"
 )
-
-type gceCloudGetter func() (*GCECloud, error)
 
 // Factory provides a way to create KMS transformers for various clouds.
 type Factory struct {
-	getGCECloud         gceCloudGetter
+	cloudName      string
+	configFilePath string
+
 	gkmsServiceOverride value.KMSService
 }
 
 // NewFactory returns a Factory instance which can create KMS based transformers.
-func NewFactory(getGCECloud gceCloudGetter) *Factory {
+func NewFactory(name, configFilePath string) *Factory {
 	return &Factory{
-		getGCECloud: getGCECloud,
+		cloudName:      name,
+		configFilePath: configFilePath,
 	}
 }
 
@@ -48,11 +50,11 @@ func NewFactoryWithGoogleService(gkmsService value.KMSService) *Factory {
 func (kmsFactory *Factory) GetGoogleKMSTransformer(projectID, location, keyRing, cryptoKey string, cacheSize int) (value.Transformer, error) {
 	gkmsService := kmsFactory.gkmsServiceOverride
 	if gkmsService == nil {
-		cloud, err := kmsFactory.getGCECloud()
+		cloud, err := google.InitGoogleCloudkmsService(kmsFactory.cloudName, kmsFactory.configFilePath)
 		if err != nil {
 			return nil, err
 		}
-		gkmsService, err = NewGoogleKMSService(projectID, location, keyRing, cryptoKey, cloud)
+		gkmsService, err = google.NewGoogleKMSService(projectID, location, keyRing, cryptoKey, cloud)
 		if err != nil {
 			return nil, err
 		}
