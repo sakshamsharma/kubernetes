@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package gce
+package google
 
 import (
 	"encoding/json"
@@ -30,10 +30,10 @@ import (
 	"google.golang.org/api/googleapi"
 )
 
-// An almost complete copy of this file is placed in
-// k8s.io/apiserver/pkg/storage/value/encrypt/kms/google/token_source.go
-// It does not contain the prometheus.MustRegister calls, and it must
-// include those if they are removed from here for some reason.
+// This file is an almost complete copy of token_source available in the GCE cloudprovider
+// package, currently at k8s.io/kubernetes/pkg/cloudprovider/providers/gce.
+// This was done to circumvent dependency restrictions, and to keep KMS code independent of
+// cloudprovider code, which, as of 1.7, is in the process of being moved.
 
 const (
 	// Max QPS to allow through to the token URL.
@@ -57,11 +57,7 @@ var (
 	)
 )
 
-func init() {
-	prometheus.MustRegister(getTokenCounter)
-	prometheus.MustRegister(getTokenFailCounter)
-}
-
+// AltTokenSource has been copied from the GCE cloudprovider.
 type AltTokenSource struct {
 	oauthClient *http.Client
 	tokenURL    string

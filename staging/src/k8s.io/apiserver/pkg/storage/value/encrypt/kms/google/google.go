@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package kms
+package google
 
 import (
 	"encoding/base64"
@@ -27,20 +27,14 @@ import (
 
 const defaultGKMSKeyRing = "google-kubernetes"
 
+// gkmsService implements KMSService
 type gkmsService struct {
 	parentName      string
 	cloudkmsService *cloudkms.Service
 }
 
-// GCECloud contains information extracted from "k8s.io/kubernetes/pkg/cloudprovider/providers/gce"
-// since that package cannot be imported, from within staging.
-type GCECloud struct {
-	CloudkmsService *cloudkms.Service
-	ProjectID       string
-}
-
 // NewGoogleKMSService creates a Google KMS connection and returns a KMSService instance which can encrypt and decrypt data.
-func NewGoogleKMSService(projectID, location, keyRing, cryptoKey string, cloud *GCECloud) (value.KMSService, error) {
+func NewGoogleKMSService(projectID, location, keyRing, cryptoKey string, cloud *GoogleCloudkmsService) (value.KMSService, error) {
 	if projectID == "" {
 		projectID = cloud.ProjectID
 	}
