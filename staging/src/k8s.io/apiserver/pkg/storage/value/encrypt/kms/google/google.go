@@ -22,19 +22,19 @@ import (
 
 	cloudkms "google.golang.org/api/cloudkms/v1"
 	"google.golang.org/api/googleapi"
-	"k8s.io/apiserver/pkg/storage/value"
 )
 
 const defaultGKMSKeyRing = "google-kubernetes"
 
-// gkmsService implements KMSService
-type gkmsService struct {
+// GKMSService provides Encrypt and Decrypt methods which allow cryptographic operations
+// using Google Cloud KMS service. It implements kms.Service interface.
+type GKMSService struct {
 	parentName      string
 	cloudkmsService *cloudkms.Service
 }
 
-// NewGoogleKMSService creates a Google KMS connection and returns a KMSService instance which can encrypt and decrypt data.
-func NewGoogleKMSService(projectID, location, keyRing, cryptoKey string, cloud *GoogleCloudkmsService) (value.KMSService, error) {
+// NewGoogleKMSService creates a Google KMS connection and returns a GKMSService instance which can encrypt and decrypt data.
+func NewGoogleKMSService(projectID, location, keyRing, cryptoKey string, cloud *CloudkmsService) (*GKMSService, error) {
 	if projectID == "" {
 		projectID = cloud.ProjectID
 	}
@@ -86,14 +86,14 @@ func NewGoogleKMSService(projectID, location, keyRing, cryptoKey string, cloud *
 	}
 	parentName = parentName + "/cryptoKeys/" + cryptoKey
 
-	return &gkmsService{
+	return &GKMSService{
 		parentName:      parentName,
 		cloudkmsService: cloud.CloudkmsService,
 	}, nil
 }
 
 // Decrypt decrypts a base64 representation of encrypted bytes.
-func (t *gkmsService) Decrypt(data string) ([]byte, error) {
+func (t *GKMSService) Decrypt(data string) ([]byte, error) {
 	resp, err := t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.
 		Decrypt(t.parentName, &cloudkms.DecryptRequest{
 			Ciphertext: data,
@@ -105,7 +105,7 @@ func (t *gkmsService) Decrypt(data string) ([]byte, error) {
 }
 
 // Encrypt encrypts bytes, and returns base64 representation of the ciphertext.
-func (t *gkmsService) Encrypt(data []byte) (string, error) {
+func (t *GKMSService) Encrypt(data []byte) (string, error) {
 	resp, err := t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.
 		Encrypt(t.parentName, &cloudkms.EncryptRequest{
 			Plaintext: base64.StdEncoding.EncodeToString(data),
@@ -115,5 +115,3 @@ func (t *gkmsService) Encrypt(data []byte) (string, error) {
 	}
 	return resp.Ciphertext, nil
 }
-
-var _ value.KMSService = &gkmsService{}

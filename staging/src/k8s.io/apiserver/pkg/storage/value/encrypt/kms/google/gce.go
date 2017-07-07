@@ -34,7 +34,7 @@ import (
 	compute "google.golang.org/api/compute/v1"
 )
 
-type GoogleCloudkmsService struct {
+type CloudkmsService struct {
 	CloudkmsService *cloudkms.Service
 	ProjectID       string
 }
@@ -58,10 +58,10 @@ type cloudConfig struct {
 	}
 }
 
-// InitGoogleCloudkmsService creates a GoogleCloudkmsService object containing the GCP ProjectID
+// InitCloudkmsService creates a CloudkmsService object containing the GCP ProjectID
 // (if available), and the cloudkmsService object.
-func InitGoogleCloudkmsService(name string, configFilePath string) (*GoogleCloudkmsService, error) {
-	cloud := &GoogleCloudkmsService{}
+func InitCloudkmsService(name string, configFilePath string) (*CloudkmsService, error) {
+	cloud := &CloudkmsService{}
 
 	if name == "gce" && configFilePath != "" {
 		projectID, err := metadata.ProjectID()
@@ -94,7 +94,7 @@ func InitGoogleCloudkmsService(name string, configFilePath string) (*GoogleCloud
 			return nil, err
 		}
 
-		cloud = &GoogleCloudkmsService{
+		cloud = &CloudkmsService{
 			CloudkmsService: cloudkmsService,
 			ProjectID:       projectID,
 		}
