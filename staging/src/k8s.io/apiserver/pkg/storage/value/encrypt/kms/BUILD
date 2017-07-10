@@ -13,6 +13,7 @@ go_library(
     tags = ["automanaged"],
     deps = [
         "//vendor/github.com/hashicorp/golang-lru:go_default_library",
+        "//vendor/google.golang.org/api/cloudkms/v1:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/storage/value:go_default_library",
     ],
 )
