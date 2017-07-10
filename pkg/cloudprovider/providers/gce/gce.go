@@ -133,7 +133,6 @@ type GCEServiceManager struct {
 	gce *GCECloud
 }
 
-// Update k8s.io/apiserver/pkg/storage/value/encrypt/kms/google/gce.go if this changes.
 type Config struct {
 	Global struct {
 		TokenURL           string   `gcfg:"token-url"`
