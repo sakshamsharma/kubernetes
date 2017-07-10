@@ -357,6 +357,7 @@ staging/src/k8s.io/apiserver/pkg/endpoints/request
 staging/src/k8s.io/apiserver/pkg/registry
 staging/src/k8s.io/apiserver/pkg/server/filters
 staging/src/k8s.io/apiserver/pkg/server/mux
+staging/src/k8s.io/apiserver/pkg/server/options/encryptionconfig
 staging/src/k8s.io/apiserver/pkg/server/routes
 staging/src/k8s.io/apiserver/pkg/storage/etcd3
 staging/src/k8s.io/apiserver/pkg/storage/etcd3
@@ -365,6 +366,8 @@ staging/src/k8s.io/apiserver/pkg/storage/storagebackend/factory
 staging/src/k8s.io/apiserver/pkg/storage/storagebackend/factory
 staging/src/k8s.io/apiserver/pkg/storage/value/encrypt/aes
 staging/src/k8s.io/apiserver/pkg/storage/value/encrypt/identity
+staging/src/k8s.io/apiserver/pkg/storage/value/encrypt/kms
+staging/src/k8s.io/apiserver/pkg/storage/value/encrypt/kms/google
 staging/src/k8s.io/apiserver/pkg/storage/value/encrypt/secretbox
 staging/src/k8s.io/apiserver/pkg/util/flushwriter
 staging/src/k8s.io/apiserver/pkg/util/logs

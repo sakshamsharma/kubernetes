@@ -17,51 +17,60 @@ limitations under the License.
 package kms
 
 import (
+	cloudkms "google.golang.org/api/cloudkms/v1"
 	"k8s.io/apiserver/pkg/storage/value"
 	"k8s.io/apiserver/pkg/storage/value/encrypt/kms/google"
 )
 
+// CloudKMSServiceFactory provides a way to obtain various KMS services needed for implementing KMS based encryption-providers.
+type CloudKMSServiceFactory interface {
+	GetGoogleKMSService() (*cloudkms.Service, string, error)
+}
+
 // Factory provides a way to create KMS transformers for various clouds.
-type Factory struct {
-	cloudName      string
-	configFilePath string
-
-	gkmsServiceOverride Service
+type Factory interface {
+	GetGoogleKMSTransformer(projectID, location, keyRing, cryptoKey string, cacheSize int) (value.Transformer, error)
 }
 
-// NewFactory returns a Factory instance which can create KMS based transformers.
-func NewFactory(name, configFilePath string) *Factory {
-	return &Factory{
-		cloudName:      name,
-		configFilePath: configFilePath,
-	}
+type factory struct {
+	kmsServiceFactory CloudKMSServiceFactory
 }
 
-// NewFactoryWithGoogleService returns a Factory instance which always uses the provided
-// Google Cloud KMS service. Used for running unit tests.
-func NewFactoryWithGoogleService(gkmsService Service) *Factory {
-	return &Factory{
-		gkmsServiceOverride: gkmsService,
+// NewFactory creates a Factory using the provided KMS service factory.
+func NewFactory(kmsServiceFactory CloudKMSServiceFactory) Factory {
+	return &factory{
+		kmsServiceFactory: kmsServiceFactory,
 	}
 }
 
 // GetGoogleKMSTransformer creates a Google KMS service which can Encrypt and Decrypt data.
-// Creates a new service each time, unless there is an override.
-func (kmsFactory *Factory) GetGoogleKMSTransformer(projectID, location, keyRing, cryptoKey string, cacheSize int) (value.Transformer, error) {
-	gkmsService := kmsFactory.gkmsServiceOverride
-	if gkmsService == nil {
-		cloud, err := google.InitCloudkmsService(kmsFactory.cloudName, kmsFactory.configFilePath)
-		if err != nil {
-			return nil, err
-		}
-		gkmsService, err = google.NewGoogleKMSService(projectID, location, keyRing, cryptoKey, cloud)
-		if err != nil {
-			return nil, err
-		}
+func (factory *factory) GetGoogleKMSTransformer(projectID, location, keyRing, cryptoKey string, cacheSize int) (value.Transformer, error) {
+	cloud, cloudProjectID, err := factory.kmsServiceFactory.GetGoogleKMSService()
+	if err != nil {
+		return nil, err
 	}
-
-	if cacheSize == 0 {
-		cacheSize = 1000
+	if len(projectID) == 0 {
+		projectID = cloudProjectID
+	}
+	gkmsService, err := google.NewGoogleKMSService(projectID, location, keyRing, cryptoKey, cloud)
+	if err != nil {
+		return nil, err
 	}
 	return NewKMSTransformer(gkmsService, cacheSize)
+}
+
+type factoryFromService struct {
+	service Service
+}
+
+// NewFactoryFromService returns a Factory instance which always uses the provided service to create a
+// KMS transformer. Useful for unit tests.
+func NewFactoryFromService(service Service) Factory {
+	return &factoryFromService{
+		service: service,
+	}
+}
+
+func (factory *factoryFromService) GetGoogleKMSTransformer(_, _, _, _ string, cacheSize int) (value.Transformer, error) {
+	return NewKMSTransformer(factory.service, cacheSize)
 }

@@ -34,30 +34,26 @@ type GKMSService struct {
 }
 
 // NewGoogleKMSService creates a Google KMS connection and returns a GKMSService instance which can encrypt and decrypt data.
-func NewGoogleKMSService(projectID, location, keyRing, cryptoKey string, cloud *CloudkmsService) (*GKMSService, error) {
-	if projectID == "" {
-		projectID = cloud.ProjectID
-	}
-
+func NewGoogleKMSService(projectID, location, keyRing, cryptoKey string, cloud *cloudkms.Service) (*GKMSService, error) {
 	// Default location and keyRing for keys
-	if location == "" {
+	if len(location) == 0 {
 		location = "global"
 	}
-	if keyRing == "" {
+	if len(keyRing) == 0 {
 		keyRing = defaultGKMSKeyRing
 	}
 
-	if projectID == "" {
+	if len(projectID) == 0 {
 		return nil, fmt.Errorf("missing projectID in encryption provider configuration for gkms provider")
 	}
-	if cryptoKey == "" {
+	if len(cryptoKey) == 0 {
 		return nil, fmt.Errorf("missing cryptoKey in encryption provider configuration for gkms provider")
 	}
 
 	parentName := fmt.Sprintf("projects/%s/locations/%s", projectID, location)
 
 	// Create the keyRing if it does not exist yet
-	_, err := cloud.CloudkmsService.Projects.Locations.KeyRings.Create(parentName,
+	_, err := cloud.Projects.Locations.KeyRings.Create(parentName,
 		&cloudkms.KeyRing{}).KeyRingId(keyRing).Do()
 	if err != nil {
 		apiError, ok := err.(*googleapi.Error)
@@ -71,7 +67,7 @@ func NewGoogleKMSService(projectID, location, keyRing, cryptoKey string, cloud *
 	parentName = parentName + "/keyRings/" + keyRing
 
 	// Create the cryptoKey if it does not exist yet
-	_, err = cloud.CloudkmsService.Projects.Locations.KeyRings.CryptoKeys.Create(parentName,
+	_, err = cloud.Projects.Locations.KeyRings.CryptoKeys.Create(parentName,
 		&cloudkms.CryptoKey{
 			Purpose: "ENCRYPT_DECRYPT",
 		}).CryptoKeyId(cryptoKey).Do()
@@ -88,7 +84,7 @@ func NewGoogleKMSService(projectID, location, keyRing, cryptoKey string, cloud *
 
 	return &GKMSService{
 		parentName:      parentName,
-		cloudkmsService: cloud.CloudkmsService,
+		cloudkmsService: cloud,
 	}, nil
 }
 

@@ -197,7 +197,7 @@ var _ kms.Service = &testKMSService{}
 func TestEncryptionProviderConfigCorrect(t *testing.T) {
 	kmsService := &testKMSService{}
 	// Create a mock kmsFactory
-	kmsFactory := kms.NewFactoryWithGoogleService(kmsService)
+	kmsFactory := kms.NewFactoryFromService(kmsService)
 
 	// Creates compound/prefix transformers with different ordering of available transformers.
 	// Transforms data using one of them, and tries to untransform using the others.
