@@ -30,11 +30,6 @@ import (
 	"google.golang.org/api/googleapi"
 )
 
-// An almost complete copy of this file is placed in
-// k8s.io/apiserver/pkg/storage/value/encrypt/kms/google/token_source.go
-// It does not contain the prometheus.MustRegister calls, and it must
-// include those if they are removed from here for some reason.
-
 const (
 	// Max QPS to allow through to the token URL.
 	tokenURLQPS = .05 // back off to once every 20 seconds when failing
