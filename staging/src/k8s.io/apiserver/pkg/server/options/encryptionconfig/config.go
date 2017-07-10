@@ -44,7 +44,7 @@ const (
 
 // GetTransformerOverrides returns the transformer overrides by reading and parsing the encryption provider configuration file.
 // It takes an optional kmsFactory as an argument, which is used when a KMS based encryption backend is used.
-func GetTransformerOverrides(filepath string, kmsFactory *kms.Factory) (map[schema.GroupResource]value.Transformer, error) {
+func GetTransformerOverrides(filepath string, kmsFactory kms.Factory) (map[schema.GroupResource]value.Transformer, error) {
 	f, err := os.Open(filepath)
 	if err != nil {
 		return nil, fmt.Errorf("error opening encryption provider configuration file %q: %v", filepath, err)
@@ -59,7 +59,7 @@ func GetTransformerOverrides(filepath string, kmsFactory *kms.Factory) (map[sche
 }
 
 // ParseEncryptionConfiguration parses configuration data and returns the transformer overrides
-func ParseEncryptionConfiguration(f io.Reader, kmsFactory *kms.Factory) (map[schema.GroupResource]value.Transformer, error) {
+func ParseEncryptionConfiguration(f io.Reader, kmsFactory kms.Factory) (map[schema.GroupResource]value.Transformer, error) {
 	configFileContents, err := ioutil.ReadAll(f)
 	if err != nil {
 		return nil, fmt.Errorf("could not read contents: %v", err)
@@ -104,7 +104,7 @@ func ParseEncryptionConfiguration(f io.Reader, kmsFactory *kms.Factory) (map[sch
 }
 
 // GetPrefixTransformers constructs and returns the appropriate prefix transformers for the passed resource using its configuration
-func GetPrefixTransformers(config *ResourceConfig, kmsFactory *kms.Factory) ([]value.PrefixTransformer, error) {
+func GetPrefixTransformers(config *ResourceConfig, kmsFactory kms.Factory) ([]value.PrefixTransformer, error) {
 	var result []value.PrefixTransformer
 	multipleProviderError := fmt.Errorf("more than one encryption provider specified in a single element, should split into different list elements")
 	for _, provider := range config.Providers {

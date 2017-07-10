@@ -26,6 +26,9 @@ import (
 	lru "github.com/hashicorp/golang-lru"
 )
 
+// defaultCacheSize is the number of decrypted DEKs which would be cached by the transformer.
+const defaultCacheSize = 1000
+
 // Service allows encrypting and decrypting data using an external Key Management Service.
 type Service interface {
 	// Decrypt a given data string to obtain the original byte data.
@@ -47,5 +50,8 @@ type kmsTransformer struct {
 // NewKMSTransformer returns a transformer which implements a KEK-DEK based envelope encryption scheme.
 // It uses kmsService to communicate with the KEK store, and storage to communicate with the DEK store.
 func NewKMSTransformer(kmsService Service, cacheSize int) (value.Transformer, error) {
+	if cacheSize == 0 {
+		cacheSize = defaultCacheSize
+	}
 	return nil, fmt.Errorf("not yet implemented")
 }
