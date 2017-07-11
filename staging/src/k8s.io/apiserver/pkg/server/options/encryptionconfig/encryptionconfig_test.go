@@ -237,28 +237,53 @@ resources:
 // testKMSService is a mock KMS service which can be used to simulate remote KMS services
 // for testing of KMS based encryption providers.
 type testKMSService struct {
-	disabled bool
+	disabled   bool
+	keyVersion int64
 }
 
 func (t *testKMSService) Decrypt(data string) ([]byte, error) {
 	if t.disabled {
 		return []byte{}, fmt.Errorf("KMS service was disabled")
 	}
-	return base64.StdEncoding.DecodeString(data)
+	dataChunks := strings.SplitN(data, ":", 2)
+	if len(dataChunks) != 2 {
+		return []byte{}, fmt.Errorf("invalid data encountered for decryption: %s. Missing key version", data)
+	}
+	return base64.StdEncoding.DecodeString(dataChunks[1])
 }
 
 func (t *testKMSService) Encrypt(data []byte) (string, error) {
 	if t.disabled {
 		return "", fmt.Errorf("KMS service was disabled")
 	}
-	return base64.StdEncoding.EncodeToString(data), nil
+	return strconv.Itoa(int(t.keyVersion)) + ":" + base64.StdEncoding.EncodeToString(data), nil
+}
+
+func (t *testKMSService) CheckStale(data string) (bool, error) {
+	dataChunks := strings.SplitN(data, ":", 2)
+	if len(dataChunks) != 2 {
+		return false, fmt.Errorf("invalid data encountered for decryption: %s. Missing key version", data)
+	}
+	keyVersion, err := strconv.ParseInt(dataChunks[0], 10, 64)
+	if err != nil {
+		return false, fmt.Errorf("invalid key version encountered during stale check: %s", dataChunks[0])
+	}
+	return (keyVersion < t.keyVersion), nil
 }
 
 func (t *testKMSService) SetDisabledStatus(status bool) {
 	t.disabled = status
 }
 
-var _ kms.Service = &testKMSService{}
+func (t *testKMSService) Rotate() {
+	t.keyVersion += 1
+}
+
+func newTestKMSService() *testKMSService {
+	return &testKMSService{
+		keyVersion: 1,
+	}
+}
 
 type testFactory struct {
 	service kms.Service
@@ -361,7 +386,7 @@ func TestEncryptionProviderConfigInvalidKey(t *testing.T) {
 
 // Throw error if KMS transformer tries to contact KMS without hitting cache.
 func TestKMSCaching(t *testing.T) {
-	kmsService := &testKMSService{}
+	kmsService := newTestKMSService()
 	serviceGetter := func(_ string, _ map[string]interface{}) (kms.Service, error) {
 		return kmsService, nil
 	}
@@ -400,7 +425,7 @@ func TestKMSCaching(t *testing.T) {
 
 // Makes KMS transformer hit cache limit, throws error if it misbehaves.
 func TestKMSCacheLimit(t *testing.T) {
-	kmsService := &testKMSService{}
+	kmsService := newTestKMSService()
 	serviceGetter := func(_ string, _ map[string]interface{}) (kms.Service, error) {
 		return kmsService, nil
 	}
@@ -438,5 +463,42 @@ func TestKMSCacheLimit(t *testing.T) {
 		if bytes.Compare(numberText, output) != 0 {
 			t.Fatalf("kmsTransformer transformed data incorrectly using cache. Expected: %v, got %v", numberText, output)
 		}
+	}
+}
+
+// Rotate the KMS key and check for stale boolean.
+func TestKMSRotate(t *testing.T) {
+	kmsService := newTestKMSService()
+	serviceGetter := func(_ string, _ map[string]interface{}) (kms.Service, error) {
+		return kmsService, nil
+	}
+
+	kmsFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithKMSFirst), serviceGetter)
+	if err != nil {
+		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithKMSFirst)
+	}
+
+	kmsTransformer := kmsFirstTransformerOverrides[schema.ParseGroupResource("secrets")]
+	context := value.DefaultContext([]byte(sampleContextText))
+	originalText := []byte(sampleText)
+
+	encText, err := kmsTransformer.TransformToStorage(originalText, context)
+	if err != nil {
+		t.Fatalf("kmsTransformer: error while transforming data (%v) to storage: %s", originalText, err)
+	}
+
+	kmsService.Rotate()
+
+	decText, stale, err := kmsTransformer.TransformFromStorage(encText, context)
+	if err != nil {
+		t.Fatalf("kmsTransformer: error while transforming data (%v) from storage: %s", encText, err)
+	}
+
+	if bytes.Compare(originalText, decText) != 0 {
+		t.Fatalf("kmsTransformer transformed data incorrectly using cache. Expected: %v, got %v", originalText, decText)
+	}
+
+	if stale != true {
+		t.Fatalf("kmsTransformer did not mark stale boolean after rotation of key")
 	}
 }

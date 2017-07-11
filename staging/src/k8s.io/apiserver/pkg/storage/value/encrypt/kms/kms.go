@@ -44,6 +44,8 @@ type Service interface {
 	Decrypt(data string) ([]byte, error)
 	// Encrypt bytes to a string ciphertext.
 	Encrypt(data []byte) (string, error)
+	// CheckStale checks if the provided encrypted text is stale and needs to be re-encrypted.
+	CheckStale(data string) (bool, error)
 }
 
 type kmsTransformer struct {
@@ -89,6 +91,7 @@ func (t *kmsTransformer) TransformFromStorage(data []byte, context value.Context
 	encData := data[2+keyLen:]
 
 	var transformer value.Transformer
+	var kmsStale bool
 	_transformer, found := t.transformers.Get(encKey)
 	if found {
 		transformer = _transformer.(value.Transformer)
@@ -107,7 +110,12 @@ func (t *kmsTransformer) TransformFromStorage(data []byte, context value.Context
 			return []byte{}, false, err
 		}
 	}
-	return transformer.TransformFromStorage(encData, context)
+	kmsStale, err := t.kmsService.CheckStale(encKey)
+	if err != nil {
+		return []byte{}, false, err
+	}
+	res, transformerStale, err := transformer.TransformFromStorage(encData, context)
+	return res, (transformerStale || kmsStale), err
 }
 
 // TransformToStorage encrypts data to be written to disk using envelope encryption.
@@ -145,6 +153,7 @@ func (t *kmsTransformer) TransformToStorage(data []byte, context value.Context) 
 
 var _ value.Transformer = &kmsTransformer{}
 
+// addTransformer inserts a new transformer to the KMS cache of DEKs for future reads.
 func (t *kmsTransformer) addTransformer(encKey string, key []byte) (value.Transformer, error) {
 	block, err := aes.NewCipher(key)
 	if err != nil {
