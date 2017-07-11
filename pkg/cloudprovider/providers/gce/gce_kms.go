@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 
 	"github.com/mitchellh/mapstructure"
 
@@ -172,20 +173,45 @@ func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]int
 	return service, nil
 }
 
-// Decrypt decrypts a base64 representation of encrypted bytes.
-func (t *gkmsService) Decrypt(data string) ([]byte, error) {
+// Decrypt decrypts a base64 representation of encrypted bytes, which has a key version prepended to the start.
+func (t *GKMSService) Decrypt(data string) ([]byte, error) {
+	dataChunks := strings.SplitN(data, ":", 2)
+	if len(dataChunks) != 2 {
+		return []byte{}, fmt.Errorf("invalid data encountered for decryption: %s. Missing key version", data)
+	}
+	keyVersion := dataChunks[0]
+
 	resp, err := t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.
 		Decrypt(t.parentName, &cloudkms.DecryptRequest{
-			Ciphertext: data,
+			Ciphertext: dataChunks[1],
 		}).Do()
 	if err != nil {
-		return nil, err
+		apiError, ok := err.(*googleapi.Error)
+		// If it was a 400, we can try to check if the key was scheduled for deletion, and restore it.
+		if !ok || apiError.Code != 400 {
+			return nil, err
+		}
+
+		// Recover the key if possible, and enable it.
+		recoverErr := t.recoverKeyVersion(keyVersion)
+		if recoverErr != nil {
+			return nil, fmt.Errorf("%v. Could not recover key too: %v", err, recoverErr)
+		}
+
+		// Try decrypting once again
+		resp, err = t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.
+			Decrypt(t.parentName, &cloudkms.DecryptRequest{
+				Ciphertext: dataChunks[1],
+			}).Do()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return base64.StdEncoding.DecodeString(resp.Plaintext)
 }
 
-// Encrypt encrypts bytes, and returns base64 representation of the ciphertext.
-func (t *gkmsService) Encrypt(data []byte) (string, error) {
+// Encrypt encrypts bytes, and returns base64 representation of the ciphertext, prepended with the key version.
+func (t *GKMSService) Encrypt(data []byte) (string, error) {
 	resp, err := t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.
 		Encrypt(t.parentName, &cloudkms.EncryptRequest{
 			Plaintext: base64.StdEncoding.EncodeToString(data),
@@ -193,5 +219,39 @@ func (t *gkmsService) Encrypt(data []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return resp.Ciphertext, nil
+
+	// KeyName looks like:
+	// projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*
+	keyNameChunks := strings.SplitN(resp.Name, "/", 10)
+	if len(keyNameChunks) != 10 {
+		return "", fmt.Errorf("invalid key version returned from Google KMS: %s", resp.Name)
+	}
+	// Prepend the key version (integer) to the string
+	return (keyNameChunks[9] + ":" + resp.Ciphertext), nil
+}
+
+// recoverKeyVersion tries to recover and enable key versions scheduled for deletion. This is called
+// when some data encrypted by the old key is encountered.
+func (t *GKMSService) recoverKeyVersion(keyVersion string) error {
+	cryptoKeyVersionObj, err := t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
+		Get(t.parentName + "/cryptoKeyVersions/" + keyVersion).Do()
+	if err != nil {
+		// Cannot handle this error
+		return err
+	}
+	if cryptoKeyVersionObj.State == "DESTROY_SCHEDULED" {
+		// Ignore error in this. Some other master may already have called this in parallel.
+		t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
+			Restore(t.parentName+"/cryptoKeyVersions/"+keyVersion, &cloudkms.RestoreCryptoKeyVersionRequest{}).Do()
+	}
+
+	// It may have been disabled to begin with, or may have been put in disabled state after restoration.
+	if cryptoKeyVersionObj.State == "DISABLED" || cryptoKeyVersionObj.State == "DESTROY_SCHEDULED" {
+		// Ignore error in this. Some other master may already have called this in parallel.
+		t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
+			Patch(t.parentName+"/cryptoKeyVersions/"+keyVersion, &cloudkms.CryptoKeyVersion{
+				State: "ENABLED",
+			}).UpdateMask("state").Do()
+	}
+	return nil
 }
