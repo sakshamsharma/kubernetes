@@ -583,6 +583,10 @@
 			"Rev": "f2499483f923065a842d38eb4c7f1927e6fc6e6d"
 		},
 		{
+			"ImportPath": "golang.org/x/net/context/ctxhttp",
+			"Rev": "f2499483f923065a842d38eb4c7f1927e6fc6e6d"
+		},
+		{
 			"ImportPath": "golang.org/x/net/html",
 			"Rev": "f2499483f923065a842d38eb4c7f1927e6fc6e6d"
 		},
@@ -665,6 +669,22 @@
 		{
 			"ImportPath": "golang.org/x/time/rate",
 			"Rev": "f51c12702a4d776e4c1fa9b0fabab841babae631"
+		},
+		{
+			"ImportPath": "google.golang.org/api/cloudkms/v1",
+			"Rev": "e3824ed33c72bf7e81da0286772c34b987520914"
+		},
+		{
+			"ImportPath": "google.golang.org/api/gensupport",
+			"Rev": "e3824ed33c72bf7e81da0286772c34b987520914"
+		},
+		{
+			"ImportPath": "google.golang.org/api/googleapi",
+			"Rev": "e3824ed33c72bf7e81da0286772c34b987520914"
+		},
+		{
+			"ImportPath": "google.golang.org/api/googleapi/internal/uritemplates",
+			"Rev": "e3824ed33c72bf7e81da0286772c34b987520914"
 		},
 		{
 			"ImportPath": "google.golang.org/grpc",
