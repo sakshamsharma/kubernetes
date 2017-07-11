@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/mitchellh/mapstructure"
 
@@ -35,7 +36,8 @@ import (
 const (
 	KMSServiceName = "google-cloudkms"
 
-	defaultGKMSKeyRing = "google-kubernetes"
+	defaultGKMSKeyRing     = "google-kubernetes"
+	delayBetweenKeyRefresh = 60
 )
 
 // GKMSConfig contains the GCE specific KMS configuration for setting up a KMS service.
@@ -163,8 +165,9 @@ func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]int
 	parentName = parentName + "/cryptoKeys/" + config.CryptoKey
 
 	service := &gkmsService{
-		parentName:      parentName,
-		cloudkmsService: cloudkmsService,
+		parentName:       parentName,
+		cloudkmsService:  cloudkmsService,
+		latestKeyVersion: 0,
 	}
 
 	// Sanity check before startup. For non-GCP clusters, the user's account may not have permissions to create
@@ -173,6 +176,12 @@ func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]int
 	if err != nil {
 		return nil, fmt.Errorf("failed to encrypt data using Google cloudkms, using key %s. Ensure that the keyRing and cryptoKey exist. Got error: %v", parentName, err)
 	}
+
+	// Start a periodic service to refresh known keys.
+	ticker := time.NewTicker(delayBetweenKeyRefresh * time.Minute)
+	quit := make(chan struct{})
+	// TODO: Do we need to shut this down in some scenario?
+	go service.refreshAvailableKeys(ticker, quit)
 
 	return service, nil
 }
@@ -276,6 +285,37 @@ func (t *GKMSService) recoverKeyVersion(keyVersion string) error {
 			}).UpdateMask("state").Do()
 	}
 	return nil
+}
+
+// refreshAvailableKeys lists the available CryptoKeyVersions periodically, and updates the latest known
+// key for stale checks. Without this, a master which does not do any writes will never realize that a
+// key rotation for KEK has occurred on cloudkms.
+func (t *GKMSService) refreshAvailableKeys(ticker *time.Ticker, quit chan struct{}) {
+	for {
+		select {
+		case <-ticker.C:
+			resp, _ := t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
+				List(t.parentName).Do()
+			for _, key := range resp.CryptoKeyVersions {
+				// KeyName looks like:
+				// projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*
+				keyNameChunks := strings.SplitN(key.Name, "/", 10)
+				// Only handle the case when there are no errors because this operation runs periodically.
+				// TODO(sakshams): Print errors as warning if something fails.
+				if len(keyNameChunks) == 10 {
+					keyVersion, err := strconv.ParseInt(keyNameChunks[9], 10, 64)
+					if err == nil {
+						if keyVersion > t.latestKeyVersion {
+							t.latestKeyVersion = keyVersion
+						}
+					}
+				}
+			}
+		case <-quit:
+			ticker.Stop()
+			return
+		}
+	}
 }
 
 // getKeyVersionFromName parses the key version from the provided full path of the key,
