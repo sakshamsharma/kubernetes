@@ -51,7 +51,6 @@ import (
 	"k8s.io/apiserver/pkg/server/filters"
 	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	serverstorage "k8s.io/apiserver/pkg/server/storage"
-	"k8s.io/apiserver/pkg/storage/value/encrypt/kms"
 	aggregatorapiserver "k8s.io/kube-aggregator/pkg/apiserver"
 	//aggregatorinformers "k8s.io/kube-aggregator/pkg/client/informers/internalversion"
 
@@ -583,7 +582,7 @@ func BuildStorageFactory(s *options.ServerRunOptions) (*serverstorage.DefaultSto
 	if s.Etcd.EncryptionProviderConfigFilepath != "" {
 		transformerOverrides, err := encryptionconfig.GetTransformerOverrides(
 			s.Etcd.EncryptionProviderConfigFilepath,
-			kms.NewFactory(cloudproviders.NewKMSServiceFactory(s.CloudProvider.CloudProvider, s.CloudProvider.CloudConfigFile)))
+			cloudproviders.NewKMSFactory(s.CloudProvider.CloudProvider, s.CloudProvider.CloudConfigFile))
 		if err != nil {
 			return nil, err
 		}

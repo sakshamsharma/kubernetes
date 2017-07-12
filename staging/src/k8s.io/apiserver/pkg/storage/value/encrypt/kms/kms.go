@@ -29,6 +29,11 @@ import (
 // defaultCacheSize is the number of decrypted DEKs which would be cached by the transformer.
 const defaultCacheSize = 1000
 
+// Factory allows creating various cloud KMS clients for implementing KEK-DEK based KMS encryption providers.
+type Factory interface {
+	NewGoogleKMSService(projectID, location, keyRing, cryptoKey string) (Service, error)
+}
+
 // Service allows encrypting and decrypting data using an external Key Management Service.
 type Service interface {
 	// Decrypt a given data string to obtain the original byte data.

@@ -142,7 +142,11 @@ func GetPrefixTransformers(config *ResourceConfig, kmsFactory kms.Factory) ([]va
 				return result, multipleProviderError
 			}
 
-			kmsTransformer, err := kmsFactory.GetGoogleKMSTransformer(provider.Gkms.ProjectID, provider.Gkms.Location, provider.Gkms.KeyRing, provider.Gkms.CryptoKey, provider.Gkms.CacheSize)
+			gkmsService, err := kmsFactory.NewGoogleKMSService(provider.Gkms.ProjectID, provider.Gkms.Location, provider.Gkms.KeyRing, provider.Gkms.CryptoKey)
+			if err != nil {
+				return result, err
+			}
+			kmsTransformer, err := kms.NewKMSTransformer(gkmsService, provider.Gkms.CacheSize)
 			if err != nil {
 				return result, err
 			}
