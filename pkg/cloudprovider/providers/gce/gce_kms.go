@@ -76,12 +76,15 @@ func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]int
 	var cloudProjectID string
 
 	// This check is false if cloud is nil, or is not an instance of gce.GCECloud.
-	if gcp, ok := cloud.(*GCECloud); ok {
+	if gke, ok := cloud.(*GCECloud); ok {
 		// Hosting on GCE/GKE with Google KMS encryption provider
-		cloudkmsService = gcp.GetKMSService()
+		cloudkmsService = gke.GetKMSService()
 
-		// cloudProjectID is the user's GCP project.
-		cloudProjectID = gcp.GetProjectID()
+		// Project ID is assumed to be the user's project unless there
+		// is an override in the configuration file. If there is an override,
+		// it will be taken into account by the Google KMS service constructor,
+		// after reading the configuration file.
+		cloudProjectID = gke.GetProjectID()
 	} else {
 		// When running outside GCE/GKE and connecting to KMS, GOOGLE_APPLICATION_CREDENTIALS
 		// environment variable is required. This describes how that can be done:
