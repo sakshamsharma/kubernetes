@@ -9,13 +9,9 @@ load(
 
 go_library(
     name = "go_default_library",
-    srcs = [
-        "kms_service.go",
-        "providers.go",
-    ],
+    srcs = ["providers.go"],
     tags = ["automanaged"],
     deps = [
-        "//pkg/cloudprovider:go_default_library",
         "//pkg/cloudprovider/providers/aws:go_default_library",
         "//pkg/cloudprovider/providers/azure:go_default_library",
         "//pkg/cloudprovider/providers/cloudstack:go_default_library",
@@ -25,10 +21,6 @@ go_library(
         "//pkg/cloudprovider/providers/photon:go_default_library",
         "//pkg/cloudprovider/providers/rackspace:go_default_library",
         "//pkg/cloudprovider/providers/vsphere:go_default_library",
-        "//vendor/golang.org/x/oauth2/google:go_default_library",
-        "//vendor/google.golang.org/api/cloudkms/v1:go_default_library",
-        "//vendor/google.golang.org/api/googleapi:go_default_library",
-        "//vendor/k8s.io/apiserver/pkg/storage/value/encrypt/kms:go_default_library",
     ],
 )
 

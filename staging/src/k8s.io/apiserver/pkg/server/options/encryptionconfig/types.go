@@ -45,8 +45,8 @@ type ProviderConfig struct {
 	Secretbox *SecretboxConfig `json:"secretbox,omitempty"`
 	// identity is the (empty) configuration for the identity transformer.
 	Identity *IdentityConfig `json:"identity,omitempty"`
-	// gkms is the configuration for the Google Cloud KMS based transformer.
-	Gkms *GKMSConfig `json:"gkms,omitempty"`
+	// kms is the common configuration section for all KMS based transformers.
+	KMS *KMSConfig `json:"kms,omitempty"`
 }
 
 // AESConfig contains the API configuration for an AES transformer.
@@ -69,26 +69,19 @@ type Key struct {
 	Secret string `json:"secret"`
 }
 
-// GKMSConfig contains API configuration for Google KMS transformer.
-type GKMSConfig struct {
-	// projectID is the GCP project which hosts the key to be used. It defaults to the GCP project
-	// in use, if you are running on Kubernetes on GKE/GCE. Setting this field will override
-	// the default. It is not optional if Kubernetes is not on GKE/GCE.
-	// +optional
-	ProjectID string `json:"projectID,omitempty"`
-	// location is the KMS location of the KeyRing to be used for encryption. The default value is "global".
-	// It can be found by checking the available KeyRings in the IAM UI.
-	// This is not the same as the GCP location of the project.
-	// +optional
-	Location string `json:"location,omitempty"`
-	// keyRing is the keyRing of the hosted key to be used. The default value is "google-kubernetes".
-	// +optional
-	KeyRing string `json:"keyRing,omitempty"`
-	// cryptoKey is the name of the key to be used for encryption of Data-Encryption-Keys.
-	CryptoKey string `json:"cryptoKey,omitempty"`
+// KMSConfig contains the configuration for the cloudkms service provider to be used for
+// implementing the KMS based encryption transformer, as well as configuration for the
+// KMS transformer.
+type KMSConfig struct {
+	// kind is the name of the cloudkms Service provider to be used.
+	Kind string `json:"kind,omitempty"`
+	// apiVersion is the API version this block has to be parsed as.
+	APIVersion string `json:"apiVersion"`
 	// cacheSize is the maximum number of secrets which are cached in memory. The default value is 1000.
 	// +optional
 	CacheSize int `json:"cacheSize,omitempty"`
+	// config is provider specific configuration and is different for each cloudkms service provider.
+	Config map[string]interface{} `json:"config,omitempty"`
 }
 
 // IdentityConfig is an empty struct to allow identity transformer in provider configuration.

@@ -31,10 +31,19 @@ import (
 // the parameter is nil.
 type Factory func(config io.Reader) (Interface, error)
 
-// All registered cloud providers.
+// KMSServiceFactory is a function that returns a cloudprovider.KMSService.
+// The cloud parameter is a cloudprovider.Interface which can be used by the KMSService.
+// The config parameter provides the unstructured configuration specific
+// to the KMS service provider.
+type KMSServiceFactory func(cloud Interface, config map[string]interface{}) (KMSService, error)
+
+// All registered cloud providers and kms services.
 var (
 	providersMutex sync.Mutex
 	providers      = make(map[string]Factory)
+
+	kmsServicesMutex sync.Mutex
+	kmsServices      = make(map[string]KMSServiceFactory)
 )
 
 const externalCloudProvider = "external"
@@ -131,4 +140,42 @@ func InitCloudProvider(name string, configFilePath string) (Interface, error) {
 	}
 
 	return cloud, nil
+}
+
+// RegisterKMSService registers a cloudprovider.KMSService by name.  This
+// is expected to happen during app startup.
+// The name is provided in the encryption-provider-config file, under
+// the property 'kind' in transformer configuration, and must match the
+// KMSServiceName in one of the available KMS services.
+func RegisterKMSService(name string, kmsService KMSServiceFactory) {
+	kmsServicesMutex.Lock()
+	defer kmsServicesMutex.Unlock()
+	if _, found := kmsServices[name]; found {
+		glog.Fatalf("KMS service %q was registered twice", name)
+	}
+	glog.V(1).Infof("Registered KMS service %q", name)
+	kmsServices[name] = kmsService
+}
+
+// GetKMSService creates an instance of the named KMS service, or nil if
+// the name is unknown.  The error return is only used if the named service
+// was known but failed to initialize. The config parameter specifies the
+// unstructured configuration specific to that provider.
+func GetKMSService(name string, cloud Interface, config map[string]interface{}) (KMSService, error) {
+	kmsServicesMutex.Lock()
+	defer kmsServicesMutex.Unlock()
+	f, found := kmsServices[name]
+	if !found {
+		return nil, nil
+	}
+	return f(cloud, config)
+}
+
+// InitKMSService creates an instance of the named KMS service.
+func InitKMSService(name string, configFilePath string, kmsName string, kmsConfig map[string]interface{}) (KMSService, error) {
+	cloud, err := InitCloudProvider(name, configFilePath)
+	if err != nil {
+		return nil, err
+	}
+	return GetKMSService(kmsName, cloud, kmsConfig)
 }
