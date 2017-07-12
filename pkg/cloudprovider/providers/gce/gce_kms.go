@@ -14,56 +14,67 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package cloudprovider
+package gce
 
 import (
 	"context"
 	"encoding/base64"
 	"fmt"
 
-	"golang.org/x/oauth2/google"
+	"github.com/mitchellh/mapstructure"
 
+	"golang.org/x/oauth2/google"
 	cloudkms "google.golang.org/api/cloudkms/v1"
 	"google.golang.org/api/googleapi"
-	"k8s.io/apiserver/pkg/storage/value/encrypt/kms"
 	"k8s.io/kubernetes/pkg/cloudprovider"
-	"k8s.io/kubernetes/pkg/cloudprovider/providers/gce"
 )
 
-const defaultGKMSKeyRing = "google-kubernetes"
+const (
+	ServiceName = "google-cloudkms"
 
-type kmsServiceFactory struct {
-	cloudName      string
-	configFilePath string
+	defaultGKMSKeyRing = "google-kubernetes"
+)
+
+type KMSConfig struct {
+	// projectID is the GCP project which hosts the key to be used. It defaults to the GCP project
+	// in use, if you are running on Kubernetes on GKE/GCE. Setting this field will override
+	// the default. It is not optional if Kubernetes is not on GKE/GCE.
+	// +optional
+	ProjectID string `json:"projectID,omitempty"`
+	// location is the KMS location of the KeyRing to be used for encryption. The default value is "global".
+	// It can be found by checking the available KeyRings in the IAM UI.
+	// This is not the same as the GCP location of the project.
+	// +optional
+	Location string `json:"location,omitempty"`
+	// keyRing is the keyRing of the hosted key to be used. The default value is "google-kubernetes".
+	// +optional
+	KeyRing string `json:"keyRing,omitempty"`
+	// cryptoKey is the name of the key to be used for encryption of Data-Encryption-Keys.
+	CryptoKey string `json:"cryptoKey,omitempty"`
 }
 
-// NewKMSFactory creates a kms.Factory which can provide various cloud KMS services.
-func NewKMSFactory(name, configFilePath string) kms.Factory {
-	return &kmsServiceFactory{
-		cloudName:      name,
-		configFilePath: configFilePath,
-	}
+func init() {
+	cloudprovider.RegisterKMSService(
+		ServiceName,
+		func(cloud cloudprovider.Interface, config map[string]interface{}) (cloudprovider.KMSService, error) {
+			return newGoogleKMSService(cloud, config)
+		})
 }
 
 // gkmsService provides Encrypt and Decrypt methods which allow cryptographic operations
-// using Google Cloud KMS service. It implements kms.Service interface.
+// using Google Cloud KMS service.
 type gkmsService struct {
 	parentName      string
 	cloudkmsService *cloudkms.Service
 }
 
-// NewGoogleKMSService creates a Google KMS connection and returns a kms.Service instance which can encrypt and decrypt data.}
-func (k *kmsServiceFactory) NewGoogleKMSService(projectID, location, keyRing, cryptoKey string) (kms.Service, error) {
-	cloud, err := cloudprovider.InitCloudProvider(k.cloudName, k.configFilePath)
-	if err != nil {
-		return nil, fmt.Errorf("cloud provider could not be initialized: %v", err)
-	}
-
+// newGoogleKMSService creates a Google KMS connection and returns a kms.Service instance which can encrypt and decrypt data.}
+func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]interface{}) (cloudprovider.KMSService, error) {
 	var cloudkmsService *cloudkms.Service
 	var cloudProjectID string
 
 	// This check is false if cloud is nil, or is not an instance of gce.GCECloud.
-	if gke, ok := cloud.(*gce.GCECloud); ok {
+	if gke, ok := cloud.(*GCECloud); ok {
 		// Hosting on GCE/GKE with Google KMS encryption provider
 		cloudkmsService = gke.GetKMSService()
 
@@ -88,29 +99,35 @@ func (k *kmsServiceFactory) NewGoogleKMSService(projectID, location, keyRing, cr
 		cloudProjectID = ""
 	}
 
-	// Default location and keyRing for keys
-	if len(location) == 0 {
-		location = "global"
-	}
-	if len(keyRing) == 0 {
-		keyRing = defaultGKMSKeyRing
+	var config KMSConfig
+	err := mapstructure.Decode(rawConfig, &config)
+	if err != nil {
+		return nil, err
 	}
 
-	if len(projectID) == 0 {
-		projectID = cloudProjectID
+	// Set defaults for projectID, location and keyRing.
+	if len(config.ProjectID) == 0 {
+		config.ProjectID = cloudProjectID
 	}
-	if len(projectID) == 0 {
+	if len(config.Location) == 0 {
+		config.Location = "global"
+	}
+	if len(config.KeyRing) == 0 {
+		config.KeyRing = defaultGKMSKeyRing
+	}
+
+	if len(config.ProjectID) == 0 {
 		return nil, fmt.Errorf("missing projectID in encryption provider configuration for gkms provider")
 	}
-	if len(cryptoKey) == 0 {
+	if len(config.CryptoKey) == 0 {
 		return nil, fmt.Errorf("missing cryptoKey in encryption provider configuration for gkms provider")
 	}
 
-	parentName := fmt.Sprintf("projects/%s/locations/%s", projectID, location)
+	parentName := fmt.Sprintf("projects/%s/locations/%s", config.ProjectID, config.Location)
 
 	// Create the keyRing if it does not exist yet
 	_, err = cloudkmsService.Projects.Locations.KeyRings.Create(parentName,
-		&cloudkms.KeyRing{}).KeyRingId(keyRing).Do()
+		&cloudkms.KeyRing{}).KeyRingId(config.KeyRing).Do()
 	if err != nil {
 		apiError, ok := err.(*googleapi.Error)
 		// If it was a 409, that means the keyring existed.
@@ -120,13 +137,13 @@ func (k *kmsServiceFactory) NewGoogleKMSService(projectID, location, keyRing, cr
 			return nil, err
 		}
 	}
-	parentName = parentName + "/keyRings/" + keyRing
+	parentName = parentName + "/keyRings/" + config.KeyRing
 
 	// Create the cryptoKey if it does not exist yet
 	_, err = cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.Create(parentName,
 		&cloudkms.CryptoKey{
 			Purpose: "ENCRYPT_DECRYPT",
-		}).CryptoKeyId(cryptoKey).Do()
+		}).CryptoKeyId(config.CryptoKey).Do()
 	if err != nil {
 		apiError, ok := err.(*googleapi.Error)
 		// If it was a 409, that means the key existed.
@@ -136,7 +153,7 @@ func (k *kmsServiceFactory) NewGoogleKMSService(projectID, location, keyRing, cr
 			return nil, err
 		}
 	}
-	parentName = parentName + "/cryptoKeys/" + cryptoKey
+	parentName = parentName + "/cryptoKeys/" + config.CryptoKey
 
 	return &gkmsService{
 		parentName:      parentName,
@@ -144,16 +161,19 @@ func (k *kmsServiceFactory) NewGoogleKMSService(projectID, location, keyRing, cr
 	}, nil
 }
 
-// Decrypt decrypts a base64 representation of encrypted bytes.
-func (t *gkmsService) Decrypt(data string) ([]byte, error) {
+// Decrypt decrypts a base64 representation of encrypted bytes, and informs if data was encrypted
+// with an old key.
+func (t *gkmsService) Decrypt(data string) ([]byte, bool, error) {
 	resp, err := t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.
 		Decrypt(t.parentName, &cloudkms.DecryptRequest{
 			Ciphertext: data,
 		}).Do()
 	if err != nil {
-		return nil, err
+		return nil, false, err
 	}
-	return base64.StdEncoding.DecodeString(resp.Plaintext)
+	res, err := base64.StdEncoding.DecodeString(resp.Plaintext)
+	// Data is not checked for staleness for now.
+	return res, false, err
 }
 
 // Encrypt encrypts bytes, and returns base64 representation of the ciphertext.

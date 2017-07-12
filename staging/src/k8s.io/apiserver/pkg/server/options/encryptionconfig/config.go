@@ -39,19 +39,21 @@ const (
 	aesCBCTransformerPrefixV1    = "k8s:enc:aescbc:v1:"
 	aesGCMTransformerPrefixV1    = "k8s:enc:aesgcm:v1:"
 	secretboxTransformerPrefixV1 = "k8s:enc:secretbox:v1:"
-	gkmsTransformerPrefixV1      = "k8s:enc:gkms:v1:"
+	kmsTransformerPrefixV1       = "k8s:enc:kms:v1:"
 )
 
+type kmsServiceGetter func(name string, kmsConfig map[string]interface{}) (kms.Service, error)
+
 // GetTransformerOverrides returns the transformer overrides by reading and parsing the encryption provider configuration file.
-// It takes an optional kmsFactory as an argument, which is used when a KMS based encryption backend is used.
-func GetTransformerOverrides(filepath string, kmsFactory kms.Factory) (map[schema.GroupResource]value.Transformer, error) {
+// It takes an optional kmsServiceGetter as an argument, which is used when a KMS based encryption backend is used.
+func GetTransformerOverrides(filepath string, kmsServiceGetter kmsServiceGetter) (map[schema.GroupResource]value.Transformer, error) {
 	f, err := os.Open(filepath)
 	if err != nil {
 		return nil, fmt.Errorf("error opening encryption provider configuration file %q: %v", filepath, err)
 	}
 	defer f.Close()
 
-	result, err := ParseEncryptionConfiguration(f, kmsFactory)
+	result, err := ParseEncryptionConfiguration(f, kmsServiceGetter)
 	if err != nil {
 		return nil, fmt.Errorf("error while parsing encryption provider configuration file %q: %v", filepath, err)
 	}
@@ -59,7 +61,7 @@ func GetTransformerOverrides(filepath string, kmsFactory kms.Factory) (map[schem
 }
 
 // ParseEncryptionConfiguration parses configuration data and returns the transformer overrides
-func ParseEncryptionConfiguration(f io.Reader, kmsFactory kms.Factory) (map[schema.GroupResource]value.Transformer, error) {
+func ParseEncryptionConfiguration(f io.Reader, kmsServiceGetter kmsServiceGetter) (map[schema.GroupResource]value.Transformer, error) {
 	configFileContents, err := ioutil.ReadAll(f)
 	if err != nil {
 		return nil, fmt.Errorf("could not read contents: %v", err)
@@ -83,7 +85,7 @@ func ParseEncryptionConfiguration(f io.Reader, kmsFactory kms.Factory) (map[sche
 
 	// For each entry in the configuration
 	for _, resourceConfig := range config.Resources {
-		transformers, err := GetPrefixTransformers(&resourceConfig, kmsFactory)
+		transformers, err := GetPrefixTransformers(&resourceConfig, kmsServiceGetter)
 		if err != nil {
 			return nil, err
 		}
@@ -104,7 +106,7 @@ func ParseEncryptionConfiguration(f io.Reader, kmsFactory kms.Factory) (map[sche
 }
 
 // GetPrefixTransformers constructs and returns the appropriate prefix transformers for the passed resource using its configuration
-func GetPrefixTransformers(config *ResourceConfig, kmsFactory kms.Factory) ([]value.PrefixTransformer, error) {
+func GetPrefixTransformers(config *ResourceConfig, kmsServiceGetter kmsServiceGetter) ([]value.PrefixTransformer, error) {
 	var result []value.PrefixTransformer
 	multipleProviderError := fmt.Errorf("more than one encryption provider specified in a single element, should split into different list elements")
 	for _, provider := range config.Providers {
@@ -137,22 +139,28 @@ func GetPrefixTransformers(config *ResourceConfig, kmsFactory kms.Factory) ([]va
 			found = true
 		}
 
-		if provider.Gkms != nil {
+		if provider.KMS != nil {
 			if found == true {
 				return result, multipleProviderError
 			}
 
-			gkmsService, err := kmsFactory.NewGoogleKMSService(provider.Gkms.ProjectID, provider.Gkms.Location, provider.Gkms.KeyRing, provider.Gkms.CryptoKey)
+			kind := provider.KMS.Kind
+			if len(kind) == 0 {
+				return result, fmt.Errorf("no valid provider-name (kind) found for KMS transformer provider")
+			}
+
+			kmsService, err := kmsServiceGetter(kind, provider.KMS.Config)
 			if err != nil {
 				return result, err
 			}
-			kmsTransformer, err := kms.NewKMSTransformer(gkmsService, provider.Gkms.CacheSize)
+
+			kmsTransformer, err := kms.NewKMSTransformer(kmsService, provider.KMS.CacheSize)
 			if err != nil {
 				return result, err
 			}
 			transformer = value.PrefixTransformer{
 				Transformer: kmsTransformer,
-				Prefix:      []byte(gkmsTransformerPrefixV1),
+				Prefix:      []byte(kmsTransformerPrefixV1 + kind + ":"),
 			}
 			found = true
 		}
