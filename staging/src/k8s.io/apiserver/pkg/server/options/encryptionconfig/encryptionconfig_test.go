@@ -194,10 +194,18 @@ func (t *testKMSService) SetDisabledStatus(status bool) {
 
 var _ kms.Service = &testKMSService{}
 
+type testFactory struct {
+	service kms.Service
+}
+
+func (t *testFactory) NewGoogleKMSService(_, _, _, _ string) (kms.Service, error) {
+	return t.service, nil
+}
+
 func TestEncryptionProviderConfigCorrect(t *testing.T) {
 	kmsService := &testKMSService{}
 	// Create a mock kmsFactory
-	kmsFactory := kms.NewFactoryFromService(kmsService)
+	kmsFactory := &testFactory{kmsService}
 
 	// Creates compound/prefix transformers with different ordering of available transformers.
 	// Transforms data using one of them, and tries to untransform using the others.
