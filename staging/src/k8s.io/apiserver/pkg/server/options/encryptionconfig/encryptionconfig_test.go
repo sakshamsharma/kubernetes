@@ -194,6 +194,14 @@ func (t *testKMSService) SetDisabledStatus(status bool) {
 
 var _ kms.Service = &testKMSService{}
 
+type testFactory struct {
+	service kms.Service
+}
+
+func (t *testFactory) NewGoogleKMSService(_, _, _, _ string) (kms.Service, error) {
+	return t.service, nil
+}
+
 func TestEncryptionProviderConfigCorrect(t *testing.T) {
 	kmsService := &testKMSService{}
 	serviceGetter := func(_ string, _ map[string]interface{}) (kms.Service, error) {
