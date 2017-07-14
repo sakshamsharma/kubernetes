@@ -22,7 +22,6 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/mitchellh/mapstructure"
 
@@ -177,17 +176,11 @@ func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]int
 		return nil, fmt.Errorf("failed to encrypt data using Google cloudkms, using key %s. Ensure that the keyRing and cryptoKey exist. Got error: %v", parentName, err)
 	}
 
-	// Start a periodic service to refresh known keys.
-	ticker := time.NewTicker(delayBetweenKeyRefresh * time.Minute)
-	quit := make(chan struct{})
-	// TODO: Do we need to shut this down in some scenario?
-	go service.refreshAvailableKeys(ticker, quit)
-
 	return service, nil
 }
 
 // Decrypt decrypts a base64 representation of encrypted bytes, which has a key version prepended to the start.
-func (t *GKMSService) Decrypt(data string) ([]byte, error) {
+func (t *gkmsService) Decrypt(data string) ([]byte, error) {
 	dataChunks := strings.SplitN(data, ":", 2)
 	if len(dataChunks) != 2 {
 		return []byte{}, fmt.Errorf("invalid data encountered for decryption: %s. Missing key version", data)
@@ -223,7 +216,7 @@ func (t *GKMSService) Decrypt(data string) ([]byte, error) {
 }
 
 // Encrypt encrypts bytes, and returns base64 representation of the ciphertext, prepended with the key version.
-func (t *GKMSService) Encrypt(data []byte) (string, error) {
+func (t *gkmsService) Encrypt(data []byte) (string, error) {
 	resp, err := t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.
 		Encrypt(t.parentName, &cloudkms.EncryptRequest{
 			Plaintext: base64.StdEncoding.EncodeToString(data),
@@ -245,7 +238,7 @@ func (t *GKMSService) Encrypt(data []byte) (string, error) {
 }
 
 // CheckStale checks if the provided encrypted text is stale and needs to be re-encrypted.
-func (t *GKMSService) CheckStale(data string) (bool, error) {
+func (t *gkmsService) CheckStale(data string) (bool, error) {
 	if t.latestKeyVersion == 0 {
 		// Not yet initialized
 		return false, nil
@@ -263,7 +256,7 @@ func (t *GKMSService) CheckStale(data string) (bool, error) {
 
 // recoverKeyVersion tries to recover and enable key versions scheduled for deletion. This is called
 // when some data encrypted by the old key is encountered.
-func (t *GKMSService) recoverKeyVersion(keyVersion string) error {
+func (t *gkmsService) recoverKeyVersion(keyVersion string) error {
 	cryptoKeyVersionObj, err := t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
 		Get(t.parentName + "/cryptoKeyVersions/" + keyVersion).Do()
 	if err != nil {
@@ -285,37 +278,6 @@ func (t *GKMSService) recoverKeyVersion(keyVersion string) error {
 			}).UpdateMask("state").Do()
 	}
 	return nil
-}
-
-// refreshAvailableKeys lists the available CryptoKeyVersions periodically, and updates the latest known
-// key for stale checks. Without this, a master which does not do any writes will never realize that a
-// key rotation for KEK has occurred on cloudkms.
-func (t *GKMSService) refreshAvailableKeys(ticker *time.Ticker, quit chan struct{}) {
-	for {
-		select {
-		case <-ticker.C:
-			resp, _ := t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
-				List(t.parentName).Do()
-			for _, key := range resp.CryptoKeyVersions {
-				// KeyName looks like:
-				// projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*
-				keyNameChunks := strings.SplitN(key.Name, "/", 10)
-				// Only handle the case when there are no errors because this operation runs periodically.
-				// TODO(sakshams): Print errors as warning if something fails.
-				if len(keyNameChunks) == 10 {
-					keyVersion, err := strconv.ParseInt(keyNameChunks[9], 10, 64)
-					if err == nil {
-						if keyVersion > t.latestKeyVersion {
-							t.latestKeyVersion = keyVersion
-						}
-					}
-				}
-			}
-		case <-quit:
-			ticker.Stop()
-			return
-		}
-	}
 }
 
 // getKeyVersionFromName parses the key version from the provided full path of the key,
