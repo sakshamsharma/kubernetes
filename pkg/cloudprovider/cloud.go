@@ -184,11 +184,3 @@ type Zones interface {
 	// GetZone returns the Zone containing the current failure zone and locality region that the program is running in
 	GetZone() (Zone, error)
 }
-
-// KMSService allows encrypting and decrypting data using an external Key Management Service.
-type KMSService interface {
-	// Decrypt a given data string to obtain the original byte data.
-	Decrypt(data string) ([]byte, error)
-	// Encrypt bytes to a string ciphertext.
-	Encrypt(data []byte) (string, error)
-}

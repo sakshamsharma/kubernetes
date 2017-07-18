@@ -26,6 +26,7 @@ import (
 	"golang.org/x/oauth2/google"
 	cloudkms "google.golang.org/api/cloudkms/v1"
 	"google.golang.org/api/googleapi"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/kms"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 )
 
@@ -35,7 +36,8 @@ const (
 	defaultGKMSKeyRing = "google-kubernetes"
 )
 
-type KMSConfig struct {
+// GKMSConfig contains the GCE specific KMS configuration for setting up a KMS service.
+type GKMSConfig struct {
 	// projectID is the GCP project which hosts the key to be used. It defaults to the GCP project
 	// in use, if you are running on Kubernetes on GKE/GCE. Setting this field will override
 	// the default. It is not optional if Kubernetes is not on GKE/GCE.
@@ -56,7 +58,7 @@ type KMSConfig struct {
 func init() {
 	cloudprovider.RegisterKMSService(
 		KMSServiceName,
-		func(cloud cloudprovider.Interface, config map[string]interface{}) (cloudprovider.KMSService, error) {
+		func(cloud cloudprovider.Interface, config map[string]interface{}) (kms.Service, error) {
 			return newGoogleKMSService(cloud, config)
 		})
 }
@@ -69,7 +71,7 @@ type gkmsService struct {
 }
 
 // newGoogleKMSService creates a Google KMS connection and returns a kms.Service instance which can encrypt and decrypt data.
-func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]interface{}) (cloudprovider.KMSService, error) {
+func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]interface{}) (kms.Service, error) {
 	var cloudkmsService *cloudkms.Service
 	var cloudProjectID string
 
@@ -96,7 +98,7 @@ func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]int
 		cloudProjectID = ""
 	}
 
-	var config KMSConfig
+	var config GKMSConfig
 	err := mapstructure.Decode(rawConfig, &config)
 	if err != nil {
 		return nil, err
