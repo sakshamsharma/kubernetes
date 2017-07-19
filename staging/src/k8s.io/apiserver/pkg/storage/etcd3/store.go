@@ -34,10 +34,15 @@ import (
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/watch"
+	genericapirequest "k8s.io/apiserver/pkg/endpoints/request"
 	"k8s.io/apiserver/pkg/storage"
 	"k8s.io/apiserver/pkg/storage/etcd"
 	"k8s.io/apiserver/pkg/storage/value"
 	utiltrace "k8s.io/apiserver/pkg/util/trace"
+)
+
+const (
+	delayBetweenStaleCheck = 20
 )
 
 // authenticatedDataString satisfies the value.Context interface. It uses the key to
@@ -110,12 +115,22 @@ func newStore(c *clientv3.Client, quorumRead bool, codec runtime.Codec, prefix s
 		// options for all Get operations.
 		result.getOps = append(result.getOps, clientv3.WithSerializable())
 	}
+
 	return result
 }
 
 // Versioner implements storage.Interface.Versioner.
 func (s *store) Versioner() storage.Versioner {
 	return s.versioner
+}
+
+func (s *store) BeginStaleWatch(newFunc func() runtime.Object, keyRootFunc func(genericapirequest.Context) string) {
+	// TODO(sakshams): Only enable this service if KMS transformer is used
+	// TODO(sakshams): Make this a member of store so that it can be shut down properly.
+	// Start a periodic service to re-encrypt stale data
+	ticker := time.NewTicker(delayBetweenStaleCheck * time.Second)
+	quit := make(chan struct{})
+	go s.cleanStale(newFunc, keyRootFunc, ticker, quit)
 }
 
 // Get implements storage.Interface.Get.
@@ -425,6 +440,57 @@ func (s *store) List(ctx context.Context, key, resourceVersion string, pred stor
 	}
 	// update version with cluster level revision
 	return s.versioner.UpdateList(listObj, uint64(getResp.Header.Revision))
+}
+
+// cleanStale is a periodic service that lists all data this storage is responsible for, and re-encrypts
+// stale data.
+func (s *store) cleanStale(newFunc func() runtime.Object, keyRootFunc func(genericapirequest.Context) string, ticker *time.Ticker, quit chan struct{}) {
+	ctx := context.Background()
+	for {
+		select {
+		case <-ticker.C:
+			key := s.pathPrefix + keyRootFunc(ctx)
+			fmt.Println("CHECKING FOR " + key)
+			// We need to make sure the key ended with "/" so that we only get children "directories".
+			// e.g. if we have key "/a", "/a/b", "/ab", getting keys with prefix "/a" will return all three,
+			// while with prefix "/a/" will return only "/a/b" which is the correct answer.
+			if !strings.HasSuffix(key, "/") {
+				key += "/"
+			}
+			getResp, err := s.client.KV.Get(ctx, key, clientv3.WithPrefix())
+			if err != nil {
+				utilruntime.HandleError(fmt.Errorf("unable to list items %q: %v", key, err))
+				continue
+			}
+
+			for _, kv := range getResp.Kvs {
+				_, stale, err := s.transformer.TransformFromStorage(kv.Value, authenticatedDataString(kv.Key))
+				if err != nil {
+					utilruntime.HandleError(fmt.Errorf("unable to transform key %q: %v", kv.Key, err))
+					continue
+				}
+				if stale {
+					fmt.Printf("DEBUG: %q is stale\n", kv.Key)
+					obj := newFunc()
+					err = s.GuaranteedUpdate(ctx, strings.TrimPrefix(string(kv.Key), s.pathPrefix), obj, false, nil, storage.SimpleUpdate(func(obj runtime.Object) (runtime.Object, error) {
+						return obj, nil
+					}))
+					if err != nil {
+						utilruntime.HandleError(fmt.Errorf("unable to update key %q: %v", kv.Key, err))
+						fmt.Printf("DEBUG: FAILED key %s\n", kv.Key)
+						continue
+					} else {
+						fmt.Printf("DEBUG: Key %q done :)\n", kv.Key)
+					}
+				} else {
+					fmt.Printf("DEBUG: %q is NOT STALE\n", kv.Key)
+				}
+			}
+		case <-quit:
+			ticker.Stop()
+			return
+		}
+	}
 }
 
 // Watch implements storage.Interface.Watch.

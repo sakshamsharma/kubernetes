@@ -74,6 +74,7 @@ func NewKMSTransformer(kmsService Service, cacheSize int) (value.Transformer, er
 
 // TransformFromStorage decrypts data encrypted by this transformer using envelope encryption.
 func (t *kmsTransformer) TransformFromStorage(data []byte, context value.Context) ([]byte, bool, error) {
+	fmt.Println("KMS FROM:" + string(context.AuthenticatedData()))
 	t.lock.RLock()
 	defer t.lock.RUnlock()
 
@@ -115,6 +116,7 @@ func (t *kmsTransformer) TransformFromStorage(data []byte, context value.Context
 
 // TransformToStorage encrypts data to be written to disk using envelope encryption.
 func (t *kmsTransformer) TransformToStorage(data []byte, context value.Context) ([]byte, error) {
+	fmt.Println("KMS TO:" + string(context.AuthenticatedData()))
 	newKey, err := generateKey(32)
 	if err != nil {
 		return []byte{}, err
