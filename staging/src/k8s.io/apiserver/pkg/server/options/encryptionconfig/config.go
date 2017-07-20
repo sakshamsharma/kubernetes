@@ -100,9 +100,10 @@ func ParseEncryptionConfiguration(f io.Reader) (map[schema.GroupResource]value.T
 	return result, nil
 }
 
-// GetPrefixTransformer constructs and returns the appropriate prefix transformers for the passed resource using its configuration
+// GetPrefixTransformers constructs and returns the appropriate prefix transformers for the passed resource using its configuration
 func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, error) {
 	var result []value.PrefixTransformer
+	multipleProviderError := fmt.Errorf("more than one encryption provider specified in a single element, should split into different list elements")
 	for _, provider := range config.Providers {
 		found := false
 
@@ -110,7 +111,7 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 		var err error
 
 		if provider.AESGCM != nil {
-			transformer, err = GetAESPrefixTransformer(provider.AESGCM, aestransformer.NewGCMTransformer, aesGCMTransformerPrefixV1)
+			transformer, err = getAESPrefixTransformer(provider.AESGCM, aestransformer.NewGCMTransformer, aesGCMTransformerPrefixV1)
 			if err != nil {
 				return result, err
 			}
@@ -119,23 +120,23 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 
 		if provider.AESCBC != nil {
 			if found == true {
-				return result, fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
+				return result, multipleProviderError
 			}
-			transformer, err = GetAESPrefixTransformer(provider.AESCBC, aestransformer.NewCBCTransformer, aesCBCTransformerPrefixV1)
+			transformer, err = getAESPrefixTransformer(provider.AESCBC, aestransformer.NewCBCTransformer, aesCBCTransformerPrefixV1)
 			found = true
 		}
 
 		if provider.Secretbox != nil {
 			if found == true {
-				return result, fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
+				return result, multipleProviderError
 			}
-			transformer, err = GetSecretboxPrefixTransformer(provider.Secretbox)
+			transformer, err = getSecretboxPrefixTransformer(provider.Secretbox)
 			found = true
 		}
 
 		if provider.Identity != nil {
 			if found == true {
-				return result, fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
+				return result, multipleProviderError
 			}
 			transformer = value.PrefixTransformer{
 				Transformer: identity.NewEncryptCheckTransformer(),
@@ -159,9 +160,9 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 // BlockTransformerFunc taske an AES cipher block and returns a value transformer.
 type BlockTransformerFunc func(cipher.Block) value.Transformer
 
-// GetAESPrefixTransformer returns a prefix transformer from the provided configuration.
+// getAESPrefixTransformer returns a prefix transformer from the provided configuration.
 // Returns an AES transformer based on the provided prefix and block transformer.
-func GetAESPrefixTransformer(config *AESConfig, fn BlockTransformerFunc, prefix string) (value.PrefixTransformer, error) {
+func getAESPrefixTransformer(config *AESConfig, fn BlockTransformerFunc, prefix string) (value.PrefixTransformer, error) {
 	var result value.PrefixTransformer
 
 	if len(config.Keys) == 0 {
@@ -208,8 +209,8 @@ func GetAESPrefixTransformer(config *AESConfig, fn BlockTransformerFunc, prefix 
 	return result, nil
 }
 
-// GetSecretboxPrefixTransformer returns a prefix transformer from the provided configuration
-func GetSecretboxPrefixTransformer(config *SecretboxConfig) (value.PrefixTransformer, error) {
+// getSecretboxPrefixTransformer returns a prefix transformer from the provided configuration
+func getSecretboxPrefixTransformer(config *SecretboxConfig) (value.PrefixTransformer, error) {
 	var result value.PrefixTransformer
 
 	if len(config.Keys) == 0 {

@@ -53,7 +53,7 @@ type AESConfig struct {
 	Keys []Key `json:"keys"`
 }
 
-// SECRETBOXConfig contains the API configuration for an Secretbox transformer.
+// SecretboxConfig contains the API configuration for an Secretbox transformer.
 type SecretboxConfig struct {
 	// keys is a list of keys to be used for creating the Secretbox transformer.
 	Keys []Key `json:"keys"`
