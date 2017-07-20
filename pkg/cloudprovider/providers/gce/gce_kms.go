@@ -200,6 +200,20 @@ func (t *gkmsService) Encrypt(data []byte) (string, error) {
 	return keyVersion + ":" + resp.Ciphertext, nil
 }
 
+// CheckStale checks if the provided encrypted text is stale and needs to be re-encrypted.
+func (t *gkmsService) CheckStale(data string) (bool, error) {
+	if t.latestKeyVersion == "" {
+		// Not yet initialized
+		return false, nil
+	}
+	// Data should be of the form: <key-version>:<data>
+	dataChunks := strings.SplitN(data, ":", 2)
+	if len(dataChunks) != 2 {
+		return false, fmt.Errorf("invalid data encountered during stale check: %s. Missing key version", data)
+	}
+	return dataChunks[0] != t.latestKeyVersion, nil
+}
+
 // unrecoverableCreationError decides if Kubernetes should ignore the encountered Google KMS
 // error. Only to be used for errors seen while creating a KeyRing or CryptoKey.
 func unrecoverableCreationError(err error) bool {

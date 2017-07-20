@@ -35,6 +35,8 @@ type Service interface {
 	Decrypt(data string) ([]byte, error)
 	// Encrypt bytes to a string ciphertext.
 	Encrypt(data []byte) (string, error)
+	// CheckStale checks if the provided encrypted text is stale and needs to be re-encrypted.
+	CheckStale(data string) (bool, error)
 }
 
 type kmsTransformer struct {
