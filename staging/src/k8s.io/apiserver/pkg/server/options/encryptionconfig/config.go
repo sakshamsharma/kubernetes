@@ -31,6 +31,7 @@ import (
 	"k8s.io/apiserver/pkg/storage/value"
 	aestransformer "k8s.io/apiserver/pkg/storage/value/encrypt/aes"
 	"k8s.io/apiserver/pkg/storage/value/encrypt/identity"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/kms"
 	"k8s.io/apiserver/pkg/storage/value/encrypt/secretbox"
 )
 
@@ -38,17 +39,21 @@ const (
 	aesCBCTransformerPrefixV1    = "k8s:enc:aescbc:v1:"
 	aesGCMTransformerPrefixV1    = "k8s:enc:aesgcm:v1:"
 	secretboxTransformerPrefixV1 = "k8s:enc:secretbox:v1:"
+	kmsTransformerPrefixV1       = "k8s:enc:kms:v1:"
 )
 
-// GetTransformerOverrides returns the transformer overrides by reading and parsing the encryption provider configuration file
-func GetTransformerOverrides(filepath string) (map[schema.GroupResource]value.Transformer, error) {
+type kmsServiceGetter func(name string, kmsConfig map[string]interface{}) (kms.Service, error)
+
+// GetTransformerOverrides returns the transformer overrides by reading and parsing the encryption provider configuration file.
+// It takes a kmsServiceGetter as an argument, which is used if a KMS based encryption backend is used.
+func GetTransformerOverrides(filepath string, initKMSService kmsServiceGetter) (map[schema.GroupResource]value.Transformer, error) {
 	f, err := os.Open(filepath)
 	if err != nil {
 		return nil, fmt.Errorf("error opening encryption provider configuration file %q: %v", filepath, err)
 	}
 	defer f.Close()
 
-	result, err := ParseEncryptionConfiguration(f)
+	result, err := ParseEncryptionConfiguration(f, initKMSService)
 	if err != nil {
 		return nil, fmt.Errorf("error while parsing encryption provider configuration file %q: %v", filepath, err)
 	}
@@ -56,7 +61,7 @@ func GetTransformerOverrides(filepath string) (map[schema.GroupResource]value.Tr
 }
 
 // ParseEncryptionConfiguration parses configuration data and returns the transformer overrides
-func ParseEncryptionConfiguration(f io.Reader) (map[schema.GroupResource]value.Transformer, error) {
+func ParseEncryptionConfiguration(f io.Reader, initKMSService kmsServiceGetter) (map[schema.GroupResource]value.Transformer, error) {
 	configFileContents, err := ioutil.ReadAll(f)
 	if err != nil {
 		return nil, fmt.Errorf("could not read contents: %v", err)
@@ -80,7 +85,7 @@ func ParseEncryptionConfiguration(f io.Reader) (map[schema.GroupResource]value.T
 
 	// For each entry in the configuration
 	for _, resourceConfig := range config.Resources {
-		transformers, err := GetPrefixTransformers(&resourceConfig)
+		transformers, err := GetPrefixTransformers(&resourceConfig, initKMSService)
 		if err != nil {
 			return nil, err
 		}
@@ -101,7 +106,7 @@ func ParseEncryptionConfiguration(f io.Reader) (map[schema.GroupResource]value.T
 }
 
 // GetPrefixTransformers constructs and returns the appropriate prefix transformers for the passed resource using its configuration
-func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, error) {
+func GetPrefixTransformers(config *ResourceConfig, initKMSService kmsServiceGetter) ([]value.PrefixTransformer, error) {
 	var result []value.PrefixTransformer
 	multipleProviderError := fmt.Errorf("more than one encryption provider specified in a single element, should split into different list elements")
 	for _, provider := range config.Providers {
@@ -131,6 +136,14 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 				return result, multipleProviderError
 			}
 			transformer, err = getSecretboxPrefixTransformer(provider.Secretbox)
+			found = true
+		}
+
+		if provider.KMS != nil {
+			if found == true {
+				return result, multipleProviderError
+			}
+			transformer, err = getKMSPrefixTransformer(provider.KMS, initKMSService)
 			found = true
 		}
 
@@ -258,4 +271,27 @@ func getSecretboxPrefixTransformer(config *SecretboxConfig) (value.PrefixTransfo
 		Prefix:      []byte(secretboxTransformerPrefixV1),
 	}
 	return result, nil
+}
+
+// getKMSPrefixTransformer returns a prefix transformer from the provided config using initKMSService,
+// which helps create KMS clients.
+func getKMSPrefixTransformer(config *KMSConfig, initKMSService kmsServiceGetter) (value.PrefixTransformer, error) {
+	kind := config.Kind
+	if len(kind) == 0 {
+		return value.PrefixTransformer{}, fmt.Errorf("no valid provider-name (kind) found for KMS transformer provider")
+	}
+
+	kmsService, err := initKMSService(kind, config.Config)
+	if err != nil {
+		return value.PrefixTransformer{}, err
+	}
+
+	kmsTransformer, err := kms.NewKMSTransformer(kmsService, config.CacheSize)
+	if err != nil {
+		return value.PrefixTransformer{}, err
+	}
+	return value.PrefixTransformer{
+		Transformer: kmsTransformer,
+		Prefix:      []byte(kmsTransformerPrefixV1 + kind + ":"),
+	}, nil
 }

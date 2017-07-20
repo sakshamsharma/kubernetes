@@ -45,6 +45,8 @@ type ProviderConfig struct {
 	Secretbox *SecretboxConfig `json:"secretbox,omitempty"`
 	// identity is the (empty) configuration for the identity transformer.
 	Identity *IdentityConfig `json:"identity,omitempty"`
+	// kms is the common configuration section for all KMS based transformers.
+	KMS *KMSConfig `json:"kms,omitempty"`
 }
 
 // AESConfig contains the API configuration for an AES transformer.
@@ -69,3 +71,18 @@ type Key struct {
 
 // IdentityConfig is an empty struct to allow identity transformer in provider configuration.
 type IdentityConfig struct{}
+
+// KMSConfig contains the configuration for the cloudkms service provider to be used for
+// implementing the KMS based encryption transformer, as well as configuration for the
+// KMS transformer.
+type KMSConfig struct {
+	// kind is the name of the cloudkms Service provider to be used.
+	Kind string `json:"kind,omitempty"`
+	// apiVersion is the API version this block has to be parsed as.
+	APIVersion string `json:"apiVersion"`
+	// cacheSize is the maximum number of secrets which are cached in memory. The default value is 1000.
+	// +optional
+	CacheSize int `json:"cacheSize,omitempty"`
+	// config is provider specific configuration and is different for each cloudkms service provider.
+	Config map[string]interface{} `json:"config,omitempty"`
+}
