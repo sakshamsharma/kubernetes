@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
-	"strconv"
 	"strings"
 
 	"github.com/mitchellh/mapstructure"
@@ -73,7 +72,7 @@ type gkmsService struct {
 	cloudkmsService *cloudkms.Service
 
 	// latestKeyVersion allows the transformer to identify stale data while reading.
-	latestKeyVersion int64
+	latestKeyVersion string
 }
 
 // newGoogleKMSService creates a Google KMS connection and returns a kms.Service instance which can encrypt and decrypt data.
@@ -164,13 +163,13 @@ func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]int
 	parentName = parentName + "/cryptoKeys/" + config.CryptoKey
 
 	service := &gkmsService{
-		parentName:       parentName,
-		cloudkmsService:  cloudkmsService,
-		latestKeyVersion: 0,
+		parentName:      parentName,
+		cloudkmsService: cloudkmsService,
 	}
 
 	// Sanity check before startup. For non-GCP clusters, the user's account may not have permissions to create
 	// the key. We need to verify the existence of the key before apiserver startup.
+	// This will also update the latestKeyVersion known to the transformer.
 	_, err = service.Encrypt([]byte("test"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to encrypt data using Google cloudkms, using key %s. Ensure that the keyRing and cryptoKey exist. Got error: %v", parentName, err)
@@ -229,29 +228,26 @@ func (t *gkmsService) Encrypt(data []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if keyVersion > t.latestKeyVersion {
+	if keyVersion != t.latestKeyVersion {
 		t.latestKeyVersion = keyVersion
 	}
 
 	// Prepend the key version (integer) to the string
-	return (strconv.Itoa(int(keyVersion)) + ":" + resp.Ciphertext), nil
+	return keyVersion + ":" + resp.Ciphertext, nil
 }
 
 // CheckStale checks if the provided encrypted text is stale and needs to be re-encrypted.
 func (t *gkmsService) CheckStale(data string) (bool, error) {
-	if t.latestKeyVersion == 0 {
+	if t.latestKeyVersion == "" {
 		// Not yet initialized
 		return false, nil
 	}
+	// Data should be of the form: <key-version>:<data>
 	dataChunks := strings.SplitN(data, ":", 2)
 	if len(dataChunks) != 2 {
 		return false, fmt.Errorf("invalid data encountered during stale check: %s. Missing key version", data)
 	}
-	keyVersion, err := strconv.ParseInt(dataChunks[0], 10, 64)
-	if err != nil {
-		return false, fmt.Errorf("invalid key version encountered during stale check: %s", dataChunks[0])
-	}
-	return (keyVersion < t.latestKeyVersion), nil
+	return dataChunks[0] != t.latestKeyVersion, nil
 }
 
 // recoverKeyVersion tries to recover and enable key versions scheduled for deletion. This is called
@@ -282,18 +278,14 @@ func (t *gkmsService) recoverKeyVersion(keyVersion string) error {
 
 // getKeyVersionFromName parses the key version from the provided full path of the key,
 // as returned by cloudkms API.
-func getKeyVersionFromName(name string) (int64, error) {
+func getKeyVersionFromName(name string) (string, error) {
 	// KeyName looks like:
 	// projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*
 	keyNameChunks := strings.SplitN(name, "/", 10)
 	// Only handle the case when there are no errors because this operation runs periodically.
 	// TODO(sakshams): Print errors as warning if something fails.
 	if len(keyNameChunks) != 10 {
-		return 0, fmt.Errorf("invalid key name returned from Google KMS: %s", name)
+		return "", fmt.Errorf("invalid key name returned from Google KMS: %s", name)
 	}
-	keyVersion, err := strconv.ParseInt(keyNameChunks[9], 10, 64)
-	if err != nil {
-		return 0, fmt.Errorf("invalid key version returned from Google KMS: %s. Error: %s", keyNameChunks[9], err)
-	}
-	return keyVersion, nil
+	return keyNameChunks[9], nil
 }
