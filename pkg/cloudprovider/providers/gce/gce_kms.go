@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/base64"
 	"fmt"
+	"strings"
 
 	"github.com/mitchellh/mapstructure"
 
@@ -68,6 +69,9 @@ func init() {
 type gkmsService struct {
 	parentName      string
 	cloudkmsService *cloudkms.Service
+
+	// latestKeyVersion allows the transformer to identify stale data.
+	latestKeyVersion string
 }
 
 // newGoogleKMSService creates a Google KMS connection and returns a kms.Service instance which can encrypt and decrypt data.
@@ -149,6 +153,7 @@ func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]int
 
 	// Sanity check before startup. For non-GCP clusters, the user's account may not have permissions to create
 	// the key. We need to verify the existence of the key before apiserver startup.
+	// This will also update the latestKeyVersion known to the transformer.
 	_, err = service.Encrypt([]byte("test"))
 	if err != nil {
 		return nil, fmt.Errorf("failed to encrypt data using Google cloudkms, using key %s. Ensure that the keyRing and cryptoKey exist. Got error: %v", parentName, err)
@@ -157,11 +162,16 @@ func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]int
 	return service, nil
 }
 
-// Decrypt decrypts a base64 representation of encrypted bytes.
+/// Decrypt decrypts a base64 representation of encrypted bytes, which has a key version prepended to the start.
 func (t *gkmsService) Decrypt(data string) ([]byte, error) {
+	dataChunks := strings.SplitN(data, ":", 2)
+	if len(dataChunks) != 2 {
+		return []byte{}, fmt.Errorf("invalid data encountered for decryption: %s. Missing key version", data)
+	}
+
 	resp, err := t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.
 		Decrypt(t.parentName, &cloudkms.DecryptRequest{
-			Ciphertext: data,
+			Ciphertext: dataChunks[1],
 		}).Do()
 	if err != nil {
 		return nil, err
@@ -169,7 +179,7 @@ func (t *gkmsService) Decrypt(data string) ([]byte, error) {
 	return base64.StdEncoding.DecodeString(resp.Plaintext)
 }
 
-// Encrypt encrypts bytes, and returns base64 representation of the ciphertext.
+// Encrypt encrypts bytes, and returns base64 representation of the ciphertext, prepended with the key version.
 func (t *gkmsService) Encrypt(data []byte) (string, error) {
 	resp, err := t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.
 		Encrypt(t.parentName, &cloudkms.EncryptRequest{
@@ -178,7 +188,16 @@ func (t *gkmsService) Encrypt(data []byte) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return resp.Ciphertext, nil
+
+	keyVersion, err := getKeyVersionFromName(resp.Name)
+	if err != nil {
+		return "", err
+	}
+	if keyVersion != t.latestKeyVersion {
+		t.latestKeyVersion = keyVersion
+	}
+	// Prepend the key version (integer) to the string
+	return keyVersion + ":" + resp.Ciphertext, nil
 }
 
 // unrecoverableCreationError decides if Kubernetes should ignore the encountered Google KMS
@@ -192,4 +211,18 @@ func unrecoverableCreationError(err error) bool {
 		return true
 	}
 	return false
+}
+
+// getKeyVersionFromName parses the key version from the provided full path of the key,
+// as returned by cloudkms API.
+func getKeyVersionFromName(name string) (string, error) {
+	// KeyName looks like:
+	// projects/*/locations/*/keyRings/*/cryptoKeys/*/cryptoKeyVersions/*
+	keyNameChunks := strings.SplitN(name, "/", 10)
+	// Only handle the case when there are no errors because this operation runs periodically.
+	// TODO(sakshams): Print errors as warning if something fails.
+	if len(keyNameChunks) != 10 {
+		return "", fmt.Errorf("invalid key name returned from Google KMS: %s", name)
+	}
+	return keyNameChunks[9], nil
 }
