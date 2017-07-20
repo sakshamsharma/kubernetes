@@ -18,10 +18,14 @@ limitations under the License.
 package kms
 
 import (
+	"crypto/aes"
+	"crypto/rand"
+	"encoding/binary"
 	"fmt"
 	"sync"
 
 	"k8s.io/apiserver/pkg/storage/value"
+	aestransformer "k8s.io/apiserver/pkg/storage/value/encrypt/aes"
 
 	lru "github.com/hashicorp/golang-lru"
 )
@@ -57,5 +61,117 @@ func NewKMSTransformer(kmsService Service, cacheSize int) (value.Transformer, er
 	if cacheSize == 0 {
 		cacheSize = defaultCacheSize
 	}
-	return nil, fmt.Errorf("kms transformer not yet implemented")
+	cache, err := lru.New(cacheSize)
+	if err != nil {
+		return nil, err
+	}
+	return &kmsTransformer{
+		kmsService:   kmsService,
+		transformers: cache,
+		cacheSize:    cacheSize,
+	}, nil
+}
+
+// TransformFromStorage decrypts data encrypted by this transformer using envelope encryption.
+func (t *kmsTransformer) TransformFromStorage(data []byte, context value.Context) ([]byte, bool, error) {
+	t.lock.RLock()
+	defer t.lock.RUnlock()
+
+	// Read the 16 bit length-of-DEK encoded at the start of the encrypted DEK.
+	keyLen := int(binary.BigEndian.Uint16(data[:2]))
+	if keyLen+2 > len(data) {
+		return []byte{}, false, fmt.Errorf("invalid data encountered by gkms transformer, length longer than available bytes: %q", data)
+	}
+	encKey := string(data[2 : keyLen+2])
+	encData := data[2+keyLen:]
+
+	var transformer value.Transformer
+	var kmsStale bool
+	// Look up the decrypted DEK from cache or KMS.
+	_transformer, found := t.transformers.Get(encKey)
+	if found {
+		transformer = _transformer.(value.Transformer)
+	} else {
+		key, err := t.kmsService.Decrypt(encKey)
+		if err != nil {
+			return []byte{}, false, fmt.Errorf("error while decrypting key: %q", err)
+		}
+
+		// We need to release the read lock to prevent a deadlock
+		t.lock.RUnlock()
+		transformer, err = t.addTransformer(encKey, key)
+		t.lock.RLock()
+
+		if err != nil {
+			return []byte{}, false, err
+		}
+	}
+	kmsStale, err := t.kmsService.CheckStale(encKey)
+	if err != nil {
+		return []byte{}, false, err
+	}
+	res, transformerStale, err := transformer.TransformFromStorage(encData, context)
+	return res, (transformerStale || kmsStale), err
+}
+
+// TransformToStorage encrypts data to be written to disk using envelope encryption.
+func (t *kmsTransformer) TransformToStorage(data []byte, context value.Context) ([]byte, error) {
+	newKey, err := generateKey(32)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	encKey, err := t.kmsService.Encrypt(newKey)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	transformer, err := t.addTransformer(encKey, newKey)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	// Append the length of the encrypted DEK as the first 2 bytes.
+	encKeyLen := make([]byte, 2)
+	encKeyBytes := []byte(encKey)
+	binary.BigEndian.PutUint16(encKeyLen, uint16(len(encKeyBytes)))
+
+	prefix := append(encKeyLen, encKeyBytes...)
+
+	prefixedData := make([]byte, len(prefix), len(data)+len(prefix))
+	copy(prefixedData, prefix)
+	result, err := transformer.TransformToStorage(data, context)
+	if err != nil {
+		return nil, err
+	}
+	prefixedData = append(prefixedData, result...)
+	return prefixedData, nil
+}
+
+var _ value.Transformer = &kmsTransformer{}
+
+// addTransformer inserts a new transformer to the KMS cache of DEKs for future reads.
+func (t *kmsTransformer) addTransformer(encKey string, key []byte) (value.Transformer, error) {
+	block, err := aes.NewCipher(key)
+	if err != nil {
+		return nil, err
+	}
+
+	transformer := aestransformer.NewCBCTransformer(block)
+
+	t.lock.Lock()
+	t.transformers.Add(encKey, transformer)
+	t.lock.Unlock()
+	return transformer, nil
+}
+
+// generateKey generates a random key using system randomness.
+func generateKey(length int) ([]byte, error) {
+	key := make([]byte, length)
+	_, err := rand.Read(key)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	return key, nil
 }

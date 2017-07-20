@@ -14,5 +14,6 @@ go_library(
     deps = [
         "//vendor/github.com/hashicorp/golang-lru:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/storage/value:go_default_library",
+        "//vendor/k8s.io/apiserver/pkg/storage/value/encrypt/aes:go_default_library",
     ],
 )
