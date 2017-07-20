@@ -174,7 +174,26 @@ func (t *gkmsService) Decrypt(data string) ([]byte, error) {
 			Ciphertext: dataChunks[1],
 		}).Do()
 	if err != nil {
-		return nil, err
+		apiError, ok := err.(*googleapi.Error)
+		// If it was a 400, we can try to check if the key was scheduled for deletion, and restore it.
+		if !ok || apiError.Code != 400 {
+			return nil, err
+		}
+
+		// Recover the key if possible, and enable it.
+		recoverErr := t.recoverKeyVersion(dataChunks[0])
+		if recoverErr != nil {
+			return nil, fmt.Errorf("%v. Could not recover key too: %v", err, recoverErr)
+		}
+
+		// Try decrypting once again
+		resp, err = t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.
+			Decrypt(t.parentName, &cloudkms.DecryptRequest{
+				Ciphertext: dataChunks[1],
+			}).Do()
+		if err != nil {
+			return nil, err
+		}
 	}
 	return base64.StdEncoding.DecodeString(resp.Plaintext)
 }
@@ -225,6 +244,32 @@ func unrecoverableCreationError(err error) bool {
 		return true
 	}
 	return false
+}
+
+// recoverKeyVersion tries to recover and enable key versions scheduled for deletion. This is called
+// when some data encrypted by the old key is encountered.
+func (t *gkmsService) recoverKeyVersion(keyVersion string) error {
+	cryptoKeyVersionObj, err := t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
+		Get(t.parentName + "/cryptoKeyVersions/" + keyVersion).Do()
+	if err != nil {
+		// Cannot handle this error
+		return err
+	}
+	if cryptoKeyVersionObj.State == "DESTROY_SCHEDULED" {
+		// Ignore error in this. Some other master may already have called this in parallel.
+		t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
+			Restore(t.parentName+"/cryptoKeyVersions/"+keyVersion, &cloudkms.RestoreCryptoKeyVersionRequest{}).Do()
+	}
+
+	// It may have been disabled to begin with, or may have been put in disabled state after restoration.
+	if cryptoKeyVersionObj.State == "DISABLED" || cryptoKeyVersionObj.State == "DESTROY_SCHEDULED" {
+		// Ignore error in this. Some other master may already have called this in parallel.
+		t.cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.CryptoKeyVersions.
+			Patch(t.parentName+"/cryptoKeyVersions/"+keyVersion, &cloudkms.CryptoKeyVersion{
+				State: "ENABLED",
+			}).UpdateMask("state").Do()
+	}
+	return nil
 }
 
 // getKeyVersionFromName parses the key version from the provided full path of the key,
