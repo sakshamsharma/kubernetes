@@ -230,6 +230,7 @@ func (t *gkmsService) Encrypt(data []byte) (string, error) {
 	}
 	if keyVersion != t.latestKeyVersion {
 		t.latestKeyVersion = keyVersion
+		fmt.Println("SS: NEW KEY VERSION: " + t.latestKeyVersion)
 	}
 
 	// Prepend the key version (integer) to the string
@@ -247,6 +248,8 @@ func (t *gkmsService) CheckStale(data string) (bool, error) {
 	if len(dataChunks) != 2 {
 		return false, fmt.Errorf("invalid data encountered during stale check: %s. Missing key version", data)
 	}
+	fmt.Println("SS: Checking stale for " + dataChunks[0] + " with known key " + t.latestKeyVersion)
+	fmt.Printf("%v\n", dataChunks[0] != t.latestKeyVersion)
 	return dataChunks[0] != t.latestKeyVersion, nil
 }
 

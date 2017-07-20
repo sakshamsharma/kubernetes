@@ -463,6 +463,9 @@ func (s *store) cleanStale(newFunc func() runtime.Object, keyRootFunc func(gener
 				continue
 			}
 
+			// Update the latest known key version
+			s.transformer.TransformToStorage([]byte("test"), authenticatedDataString(""))
+
 			for _, kv := range getResp.Kvs {
 				_, stale, err := s.transformer.TransformFromStorage(kv.Value, authenticatedDataString(kv.Key))
 				if err != nil {
