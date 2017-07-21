@@ -5,19 +5,24 @@ licenses(["notice"])
 load(
     "@io_bazel_rules_go//go:def.bzl",
     "go_library",
+    "go_test",
 )
 
 go_library(
     name = "go_default_library",
-    srcs = ["encryption.go"],
+    srcs = [
+        "encryption.go",
+        "types.go",
+    ],
     tags = ["automanaged"],
     deps = [
         "//pkg/cloudprovider:go_default_library",
-        "//pkg/kubeapiserver/options:go_default_library",
+        "//vendor/gopkg.in/yaml.v2:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
-        "//vendor/k8s.io/apiserver/pkg/server/options/encryptionconfig:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/storage/value:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/storage/value/encrypt/envelope:go_default_library",
+        "//vendor/k8s.io/apiserver/pkg/storage/value/encrypt/identity:go_default_library",
+        "//vendor/k8s.io/apiserver/pkg/storage/value/encrypt/secretbox:go_default_library",
     ],
 )
 
@@ -32,4 +37,16 @@ filegroup(
     name = "all-srcs",
     srcs = [":package-srcs"],
     tags = ["automanaged"],
+)
+
+go_test(
+    name = "go_default_test",
+    srcs = ["encryptionconfig_test.go"],
+    library = ":go_default_library",
+    tags = ["automanaged"],
+    deps = [
+        "//vendor/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
+        "//vendor/k8s.io/apiserver/pkg/storage/value:go_default_library",
+        "//vendor/k8s.io/apiserver/pkg/storage/value/encrypt/envelope:go_default_library",
+    ],
 )

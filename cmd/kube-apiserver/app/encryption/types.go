@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package encryptionconfig
+package encryption
 
 // EncryptionConfig stores the complete configuration for encryption providers.
 type EncryptionConfig struct {
@@ -45,8 +45,9 @@ type ProviderConfig struct {
 	Secretbox *SecretboxConfig `json:"secretbox,omitempty"`
 	// identity is the (empty) configuration for the identity transformer.
 	Identity *IdentityConfig `json:"identity,omitempty"`
-	// envelope is the common configuration section for all envelope encryption transformers.
-	Envelope *EnvelopeConfig `json:"envelope,omitempty"`
+	// cloudprovidedkms is the common configuration section for all envelope encryption transformers
+	// which use the KMS provided by the cloud the cluster is on.
+	CloudProvidedKMS *CloudProvidedKMSConfig `json:"cloudprovidedkms,omitempty"`
 }
 
 // AESConfig contains the API configuration for an AES transformer.
@@ -72,10 +73,9 @@ type Key struct {
 // IdentityConfig is an empty struct to allow identity transformer in provider configuration.
 type IdentityConfig struct{}
 
-// EnvelopeConfig contains the configuration for the cloudkms service provider to be used for
-// implementing the Envelope encryption transformer, as well as configuration for the
-// Envelope transformer.
-type EnvelopeConfig struct {
+// CloudProvidedKMSConfig contains the configuration for an envelope transformer which uses
+// the KMS provided by the host cloud as the root of trust.
+type CloudProvidedKMSConfig struct {
 	// kind is the name of the cloudkms Service provider to be used.
 	Kind string `json:"kind,omitempty"`
 	// apiVersion is the API version this block has to be parsed as.
@@ -83,6 +83,7 @@ type EnvelopeConfig struct {
 	// cacheSize is the maximum number of secrets which are cached in memory. The default value is 1000.
 	// +optional
 	CacheSize int `json:"cacheSize,omitempty"`
-	// config is provider specific configuration and is different for each cloudkms service provider.
-	Config map[string]interface{} `json:"config,omitempty"`
+	// name is the name of the KMS service to be used, helpful for clouds which may provide
+	// multiple KMS services.
+	Name string `json:"name,omitempty"`
 }
