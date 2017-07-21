@@ -25,7 +25,7 @@ import (
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
-	"k8s.io/apiserver/pkg/storage/value/encrypt/kms"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 )
 
 const (
@@ -168,36 +168,36 @@ resources:
 `
 )
 
-// testKMSService is a mock KMS service which can be used to simulate remote KMS services
-// for testing of KMS based encryption providers.
-type testKMSService struct {
+// testEnvelopeService is a mock envelope service which can be used to simulate remote Envelope services
+// for testing of envelope encryption providers.
+type testEnvelopeService struct {
 	disabled bool
 }
 
-func (t *testKMSService) Decrypt(data string) ([]byte, error) {
+func (t *testEnvelopeService) Decrypt(data string) ([]byte, error) {
 	if t.disabled {
-		return []byte{}, fmt.Errorf("KMS service was disabled")
+		return []byte{}, fmt.Errorf("Envelope service was disabled")
 	}
 	return base64.StdEncoding.DecodeString(data)
 }
 
-func (t *testKMSService) Encrypt(data []byte) (string, error) {
+func (t *testEnvelopeService) Encrypt(data []byte) (string, error) {
 	if t.disabled {
-		return "", fmt.Errorf("KMS service was disabled")
+		return "", fmt.Errorf("Envelope service was disabled")
 	}
 	return base64.StdEncoding.EncodeToString(data), nil
 }
 
-func (t *testKMSService) SetDisabledStatus(status bool) {
+func (t *testEnvelopeService) SetDisabledStatus(status bool) {
 	t.disabled = status
 }
 
-var _ kms.Service = &testKMSService{}
+var _ envelope.Service = &testEnvelopeService{}
 
 func TestEncryptionProviderConfigCorrect(t *testing.T) {
-	kmsService := &testKMSService{}
-	serviceGetter := func(_ string, _ map[string]interface{}) (kms.Service, error) {
-		return kmsService, nil
+	envelopeService := &testEnvelopeService{}
+	serviceGetter := func(_ string, _ map[string]interface{}) (envelope.Service, error) {
+		return envelopeService, nil
 	}
 
 	// Creates compound/prefix transformers with different ordering of available transformers.

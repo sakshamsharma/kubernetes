@@ -14,8 +14,8 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-// Package kms transforms values for storage at rest using a KMS provider
-package kms
+// Package envelope transforms values for storage at rest using a Envelope provider
+package envelope
 
 import (
 	"fmt"
@@ -37,9 +37,9 @@ type Service interface {
 	Encrypt(data []byte) (string, error)
 }
 
-type kmsTransformer struct {
-	kmsService   Service
-	transformers *lru.Cache
+type envelopeTransformer struct {
+	envelopeService Service
+	transformers    *lru.Cache
 
 	// cacheSize is the maximum number of DEKs that are cached.
 	cacheSize int
@@ -47,13 +47,13 @@ type kmsTransformer struct {
 	lock sync.RWMutex
 }
 
-// NewKMSTransformer returns a transformer which implements a KEK-DEK based envelope encryption scheme.
-// It uses kmsService to encrypt and decrypt DEKs. Respective DEKs (in encrypted form) are prepended to
+// NewEnvelopeTransformer returns a transformer which implements a KEK-DEK based envelope encryption scheme.
+// It uses envelopeService to encrypt and decrypt DEKs. Respective DEKs (in encrypted form) are prepended to
 // the data items they encrypt. A cache (of size cacheSize) is maintained to store the most recently
 // used decrypted DEKs in memory.
-func NewKMSTransformer(kmsService Service, cacheSize int) (value.Transformer, error) {
+func NewEnvelopeTransformer(envelopeService Service, cacheSize int) (value.Transformer, error) {
 	if cacheSize == 0 {
 		cacheSize = defaultCacheSize
 	}
-	return nil, fmt.Errorf("kms transformer not yet implemented")
+	return nil, fmt.Errorf("envelope transformer not yet implemented")
 }

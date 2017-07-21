@@ -26,7 +26,7 @@ import (
 	"golang.org/x/oauth2/google"
 	cloudkms "google.golang.org/api/cloudkms/v1"
 	"google.golang.org/api/googleapi"
-	"k8s.io/apiserver/pkg/storage/value/encrypt/kms"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 )
 
@@ -58,7 +58,7 @@ type GKMSConfig struct {
 func init() {
 	cloudprovider.RegisterKMSService(
 		KMSServiceName,
-		func(cloud cloudprovider.Interface, config map[string]interface{}) (kms.Service, error) {
+		func(cloud cloudprovider.Interface, config map[string]interface{}) (envelope.Service, error) {
 			return newGoogleKMSService(cloud, config)
 		})
 }
@@ -70,8 +70,8 @@ type gkmsService struct {
 	cloudkmsService *cloudkms.Service
 }
 
-// newGoogleKMSService creates a Google KMS connection and returns a kms.Service instance which can encrypt and decrypt data.
-func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]interface{}) (kms.Service, error) {
+// newGoogleKMSService creates a Google KMS connection and returns a envelope.Service instance which can encrypt and decrypt data.
+func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]interface{}) (envelope.Service, error) {
 	var cloudkmsService *cloudkms.Service
 	var cloudProjectID string
 

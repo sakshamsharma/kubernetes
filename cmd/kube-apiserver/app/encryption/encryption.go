@@ -21,7 +21,7 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/server/options/encryptionconfig"
 	"k8s.io/apiserver/pkg/storage/value"
-	"k8s.io/apiserver/pkg/storage/value/encrypt/kms"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	kubeoptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
 )
@@ -32,8 +32,8 @@ import (
 func GetTransformerOverrides(configFilePath string, cloudProvider *kubeoptions.CloudProviderOptions) (map[schema.GroupResource]value.Transformer, error) {
 	transformerOverrides, err := encryptionconfig.GetTransformerOverrides(
 		configFilePath,
-		func(name string, kmsConfig map[string]interface{}) (kms.Service, error) {
-			return cloudprovider.InitKMSService(cloudProvider.CloudProvider, cloudProvider.CloudConfigFile, name, kmsConfig)
+		func(name string, envelopeConfig map[string]interface{}) (envelope.Service, error) {
+			return cloudprovider.InitKMSService(cloudProvider.CloudProvider, cloudProvider.CloudConfigFile, name, envelopeConfig)
 		})
 	if err != nil {
 		return nil, err

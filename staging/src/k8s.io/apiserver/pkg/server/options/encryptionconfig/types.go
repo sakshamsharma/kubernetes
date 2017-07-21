@@ -45,8 +45,8 @@ type ProviderConfig struct {
 	Secretbox *SecretboxConfig `json:"secretbox,omitempty"`
 	// identity is the (empty) configuration for the identity transformer.
 	Identity *IdentityConfig `json:"identity,omitempty"`
-	// kms is the common configuration section for all KMS based transformers.
-	KMS *KMSConfig `json:"kms,omitempty"`
+	// envelope is the common configuration section for all envelope encryption transformers.
+	Envelope *EnvelopeConfig `json:"envelope,omitempty"`
 }
 
 // AESConfig contains the API configuration for an AES transformer.
@@ -72,10 +72,10 @@ type Key struct {
 // IdentityConfig is an empty struct to allow identity transformer in provider configuration.
 type IdentityConfig struct{}
 
-// KMSConfig contains the configuration for the cloudkms service provider to be used for
-// implementing the KMS based encryption transformer, as well as configuration for the
-// KMS transformer.
-type KMSConfig struct {
+// EnvelopeConfig contains the configuration for the cloudkms service provider to be used for
+// implementing the Envelope encryption transformer, as well as configuration for the
+// Envelope transformer.
+type EnvelopeConfig struct {
 	// kind is the name of the cloudkms Service provider to be used.
 	Kind string `json:"kind,omitempty"`
 	// apiVersion is the API version this block has to be parsed as.

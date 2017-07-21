@@ -30,8 +30,8 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
 	aestransformer "k8s.io/apiserver/pkg/storage/value/encrypt/aes"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 	"k8s.io/apiserver/pkg/storage/value/encrypt/identity"
-	"k8s.io/apiserver/pkg/storage/value/encrypt/kms"
 	"k8s.io/apiserver/pkg/storage/value/encrypt/secretbox"
 )
 
@@ -42,7 +42,7 @@ const (
 	kmsTransformerPrefixV1       = "k8s:enc:kms:v1:"
 )
 
-type kmsServiceGetter func(name string, kmsConfig map[string]interface{}) (kms.Service, error)
+type kmsServiceGetter func(name string, kmsConfig map[string]interface{}) (envelope.Service, error)
 
 // GetTransformerOverrides returns the transformer overrides by reading and parsing the encryption provider configuration file.
 // It takes a kmsServiceGetter as an argument, which is used if a KMS based encryption backend is used.
@@ -139,11 +139,11 @@ func GetPrefixTransformers(config *ResourceConfig, initKMSService kmsServiceGett
 			found = true
 		}
 
-		if provider.KMS != nil {
+		if provider.Envelope != nil {
 			if found == true {
 				return result, multipleProviderError
 			}
-			transformer, err = getKMSPrefixTransformer(provider.KMS, initKMSService)
+			transformer, err = getEnvelopePrefixTransformer(provider.Envelope, initKMSService)
 			found = true
 		}
 
@@ -273,9 +273,9 @@ func getSecretboxPrefixTransformer(config *SecretboxConfig) (value.PrefixTransfo
 	return result, nil
 }
 
-// getKMSPrefixTransformer returns a prefix transformer from the provided config using initKMSService,
+// getEnvelopePrefixTransformer returns a prefix transformer from the provided config using initKMSService,
 // which helps create KMS clients.
-func getKMSPrefixTransformer(config *KMSConfig, initKMSService kmsServiceGetter) (value.PrefixTransformer, error) {
+func getEnvelopePrefixTransformer(config *EnvelopeConfig, initKMSService kmsServiceGetter) (value.PrefixTransformer, error) {
 	kind := config.Kind
 	if len(kind) == 0 {
 		return value.PrefixTransformer{}, fmt.Errorf("no valid provider-name (kind) found for KMS transformer provider")
@@ -286,7 +286,7 @@ func getKMSPrefixTransformer(config *KMSConfig, initKMSService kmsServiceGetter)
 		return value.PrefixTransformer{}, err
 	}
 
-	kmsTransformer, err := kms.NewKMSTransformer(kmsService, config.CacheSize)
+	kmsTransformer, err := envelope.NewEnvelopeTransformer(kmsService, config.CacheSize)
 	if err != nil {
 		return value.PrefixTransformer{}, err
 	}

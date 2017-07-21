@@ -9,7 +9,7 @@ load(
 
 go_library(
     name = "go_default_library",
-    srcs = ["kms.go"],
+    srcs = ["envelope.go"],
     tags = ["automanaged"],
     deps = [
         "//vendor/github.com/hashicorp/golang-lru:go_default_library",
