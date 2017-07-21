@@ -17,17 +17,12 @@ limitations under the License.
 package gce
 
 import (
-	"context"
 	"encoding/base64"
 	"fmt"
 
-	"github.com/mitchellh/mapstructure"
-
-	"golang.org/x/oauth2/google"
 	cloudkms "google.golang.org/api/cloudkms/v1"
 	"google.golang.org/api/googleapi"
 	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
-	"k8s.io/kubernetes/pkg/cloudprovider"
 )
 
 const (
@@ -36,31 +31,18 @@ const (
 	defaultGKMSKeyRing = "google-kubernetes"
 )
 
-// GKMSConfig contains the GCE specific KMS configuration for setting up a KMS service.
-type GKMSConfig struct {
-	// projectID is the GCP project which hosts the key to be used. It defaults to the GCP project
-	// in use, if you are running on Kubernetes on GKE/GCE. Setting this field will override
-	// the default. It is not optional if Kubernetes is not on GKE/GCE.
-	// +optional
-	ProjectID string `json:"projectID,omitempty"`
+// gkmsConfig contains the GCE specific KMS configuration for setting up a KMS connection.
+type gkmsConfig struct {
 	// location is the KMS location of the KeyRing to be used for encryption. The default value is "global".
 	// It can be found by checking the available KeyRings in the IAM UI.
 	// This is not the same as the GCP location of the project.
 	// +optional
-	Location string `json:"location,omitempty"`
+	Location string
 	// keyRing is the keyRing of the hosted key to be used. The default value is "google-kubernetes".
 	// +optional
-	KeyRing string `json:"keyRing,omitempty"`
+	KeyRing string
 	// cryptoKey is the name of the key to be used for encryption of Data-Encryption-Keys.
-	CryptoKey string `json:"cryptoKey,omitempty"`
-}
-
-func init() {
-	cloudprovider.RegisterKMSService(
-		KMSServiceName,
-		func(cloud cloudprovider.Interface, config map[string]interface{}) (envelope.Service, error) {
-			return newGoogleKMSService(cloud, config)
-		})
+	CryptoKey string
 }
 
 // gkmsService provides Encrypt and Decrypt methods which allow cryptographic operations
@@ -70,77 +52,46 @@ type gkmsService struct {
 	cloudkmsService *cloudkms.Service
 }
 
-// newGoogleKMSService creates a Google KMS connection and returns a envelope.Service instance which can encrypt and decrypt data.
-func newGoogleKMSService(cloud cloudprovider.Interface, rawConfig map[string]interface{}) (envelope.Service, error) {
-	var cloudkmsService *cloudkms.Service
-	var cloudProjectID string
-
-	// This check is false if cloud is nil, or is not an instance of gce.GCECloud.
-	if gcp, ok := cloud.(*GCECloud); ok {
-		// Hosting on GCE/GKE with Google KMS encryption provider
-		cloudkmsService = gcp.GetKMSService()
-
-		// cloudProjectID is the user's GCP project.
-		cloudProjectID = gcp.GetProjectID()
-	} else {
-		// When running outside GCE/GKE and connecting to KMS, GOOGLE_APPLICATION_CREDENTIALS
-		// environment variable is required. This describes how that can be done:
-		// https://developers.google.com/identity/protocols/application-default-credentials
-		ctx := context.Background()
-		client, err := google.DefaultClient(ctx, cloudkms.CloudPlatformScope)
-		if err != nil {
-			return nil, err
-		}
-		cloudkmsService, err = cloudkms.New(client)
-		if err != nil {
-			return nil, err
-		}
-		cloudProjectID = ""
+// KMS returns a key management service supported by the cloud.
+func (gce *GCECloud) KMS(name string) (envelope.Service, error) {
+	if name != KMSServiceName {
+		return nil, fmt.Errorf("implementation for KMS provider %q was not found for Google cloud", name)
 	}
 
-	var config GKMSConfig
-	err := mapstructure.Decode(rawConfig, &config)
-	if err != nil {
-		return nil, err
+	// Hosting on GCE/GKE with Google KMS encryption provider
+	cloudkmsService := gce.GetKMSService()
+
+	// Set defaults for location and keyRing.
+	if len(gce.kmsConfig.Location) == 0 {
+		gce.kmsConfig.Location = "global"
+	}
+	if len(gce.kmsConfig.KeyRing) == 0 {
+		gce.kmsConfig.KeyRing = defaultGKMSKeyRing
 	}
 
-	// Set defaults for projectID, location and keyRing.
-	if len(config.ProjectID) == 0 {
-		config.ProjectID = cloudProjectID
-	}
-	if len(config.Location) == 0 {
-		config.Location = "global"
-	}
-	if len(config.KeyRing) == 0 {
-		config.KeyRing = defaultGKMSKeyRing
+	if len(gce.kmsConfig.CryptoKey) == 0 {
+		return nil, fmt.Errorf("missing cryptoKey in encryption provider gce.kmsConfiguration for gkms provider")
 	}
 
-	if len(config.ProjectID) == 0 {
-		return nil, fmt.Errorf("missing projectID in encryption provider configuration for gkms provider")
-	}
-	if len(config.CryptoKey) == 0 {
-		return nil, fmt.Errorf("missing cryptoKey in encryption provider configuration for gkms provider")
-	}
-
-	parentName := fmt.Sprintf("projects/%s/locations/%s", config.ProjectID, config.Location)
+	parentName := fmt.Sprintf("projects/%s/locations/%s", gce.projectID, gce.kmsConfig.Location)
 
 	// Create the keyRing if it does not exist yet
-	_, err = cloudkmsService.Projects.Locations.KeyRings.Create(parentName,
-		&cloudkms.KeyRing{}).KeyRingId(config.KeyRing).Do()
+	_, err := cloudkmsService.Projects.Locations.KeyRings.Create(parentName,
+		&cloudkms.KeyRing{}).KeyRingId(gce.kmsConfig.KeyRing).Do()
 	if err != nil && unrecoverableCreationError(err) {
 		return nil, err
 	}
-	parentName = parentName + "/keyRings/" + config.KeyRing
+	parentName = parentName + "/keyRings/" + gce.kmsConfig.KeyRing
 
 	// Create the cryptoKey if it does not exist yet
 	_, err = cloudkmsService.Projects.Locations.KeyRings.CryptoKeys.Create(parentName,
 		&cloudkms.CryptoKey{
 			Purpose: "ENCRYPT_DECRYPT",
-		}).CryptoKeyId(config.CryptoKey).Do()
+		}).CryptoKeyId(gce.kmsConfig.CryptoKey).Do()
 	if err != nil && unrecoverableCreationError(err) {
 		return nil, err
 	}
-	parentName = parentName + "/cryptoKeys/" + config.CryptoKey
+	parentName = parentName + "/cryptoKeys/" + gce.kmsConfig.CryptoKey
 
 	service := &gkmsService{
 		parentName:      parentName,

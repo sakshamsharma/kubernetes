@@ -33,6 +33,7 @@ import (
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
 )
@@ -311,4 +312,8 @@ func (v *OVirtCloud) CurrentNodeName(hostname string) (types.NodeName, error) {
 
 func (v *OVirtCloud) AddSSHKeyToAllInstances(user string, keyData []byte) error {
 	return errors.New("unimplemented")
+}
+
+func (v *OVirtCloud) KMS(string) (envelope.Service, error) {
+	return nil, nil
 }

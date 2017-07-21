@@ -25,6 +25,7 @@ import (
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
 )
@@ -109,6 +110,11 @@ func (f *FakeCloud) ProviderName() string {
 // ScrubDNS filters DNS settings for pods.
 func (f *FakeCloud) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []string) {
 	return nameservers, searches
+}
+
+// KMS returns a key management service supported by the cloud.
+func (f *FakeCloud) KMS(string) (envelope.Service, error) {
+	return nil, nil
 }
 
 // LoadBalancer returns a fake implementation of LoadBalancer.
