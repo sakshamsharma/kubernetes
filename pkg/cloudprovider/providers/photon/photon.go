@@ -39,6 +39,7 @@ import (
 	"gopkg.in/gcfg.v1"
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
@@ -719,4 +720,9 @@ func (pc *PCCloud) DeleteDisk(pdID string) error {
 	}
 
 	return nil
+}
+
+// KMS provides a key management service supported by the cloud.
+func (pc *PCCloud) KMS(string) (envelope.Service, error) {
+	return nil, nil
 }

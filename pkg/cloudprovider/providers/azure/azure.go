@@ -24,6 +24,7 @@ import (
 	"io/ioutil"
 	"time"
 
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 	"k8s.io/client-go/util/flowcontrol"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
@@ -380,6 +381,11 @@ func (az *Cloud) Routes() (cloudprovider.Routes, bool) {
 // ScrubDNS provides an opportunity for cloud-provider-specific code to process DNS settings for pods.
 func (az *Cloud) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []string) {
 	return nameservers, searches
+}
+
+// KMS provides a key management service supported by the cloud.
+func (az *Cloud) KMS(string) (envelope.Service, error) {
+	return nil, nil
 }
 
 // ProviderName returns the cloud provider ID.

@@ -22,8 +22,6 @@ import (
 	"os"
 	"sync"
 
-	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
-
 	"github.com/golang/glog"
 )
 
@@ -33,19 +31,10 @@ import (
 // the parameter is nil.
 type Factory func(config io.Reader) (Interface, error)
 
-// kmsFactory is a function that returns a envelope.Service.
-// The cloud parameter is a cloudprovider.Interface which can be used by the envelope.Service.
-// The config parameter provides the unstructured configuration specific
-// to the KMS service provider.
-type kmsFactory func(cloud Interface, config map[string]interface{}) (envelope.Service, error)
-
 // All registered cloud providers and kms services.
 var (
 	providersMutex sync.Mutex
 	providers      = make(map[string]Factory)
-
-	kmsFactoriesMutex sync.Mutex
-	kmsFactories      = make(map[string]kmsFactory)
 )
 
 const externalCloudProvider = "external"
@@ -142,42 +131,4 @@ func InitCloudProvider(name string, configFilePath string) (Interface, error) {
 	}
 
 	return cloud, nil
-}
-
-// RegisterKMSService registers a envelope.Service by name.  This
-// is expected to happen during app startup.
-// The name is provided in the encryption-provider-config file, under
-// the property 'kind' in transformer configuration, and must match the
-// KMSServiceName in one of the available KMS services.
-func RegisterKMSService(name string, kmsFactory kmsFactory) {
-	kmsFactoriesMutex.Lock()
-	defer kmsFactoriesMutex.Unlock()
-	if _, found := kmsFactories[name]; found {
-		glog.Fatalf("KMS service %q was registered twice", name)
-	}
-	glog.V(1).Infof("Registered KMS service %q", name)
-	kmsFactories[name] = kmsFactory
-}
-
-// GetKMSService creates an instance of the named KMS service, or nil if
-// the name is unknown.  The error return is only used if the named service
-// was known but failed to initialize. The config parameter specifies the
-// unstructured configuration specific to that provider.
-func GetKMSService(name string, cloud Interface, config map[string]interface{}) (envelope.Service, error) {
-	kmsFactoriesMutex.Lock()
-	defer kmsFactoriesMutex.Unlock()
-	f, ok := kmsFactories[name]
-	if !ok {
-		return nil, nil
-	}
-	return f(cloud, config)
-}
-
-// InitKMSService creates an instance of the named KMS service.
-func InitKMSService(name string, configFilePath string, kmsName string, kmsConfig map[string]interface{}) (envelope.Service, error) {
-	cloud, err := InitCloudProvider(name, configFilePath)
-	if err != nil {
-		return nil, err
-	}
-	return GetKMSService(kmsName, cloud, kmsConfig)
 }

@@ -51,13 +51,13 @@ const (
 func GetTransformerOverrides(encryptionConfigFilePath string, cloudProvider *kubeoptions.CloudProviderOptions) (map[schema.GroupResource]value.Transformer, error) {
 	f, err := os.Open(encryptionConfigFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("error opening encryption provider configuration file %q: %v", filepath, err)
+		return nil, fmt.Errorf("error opening encryption provider configuration file %q: %v", encryptionConfigFilePath, err)
 	}
 	defer f.Close()
 
 	result, err := ParseEncryptionConfiguration(f, cloudProvider)
 	if err != nil {
-		return nil, fmt.Errorf("error while parsing encryption provider configuration file %q: %v", filepath, err)
+		return nil, fmt.Errorf("error while parsing encryption provider configuration file %q: %v", encryptionConfigFilePath, err)
 	}
 	return result, nil
 }
@@ -145,15 +145,7 @@ func GetPrefixTransformers(config *ResourceConfig, cloudProvider *kubeoptions.Cl
 			if found == true {
 				return result, multipleProviderError
 			}
-			cloud, err := cloudprovider.InitCloudProvider(s.CloudProvider.CloudProvider, s.CloudProvider.CloudConfigFile)
-			if err != nil {
-				return result, fmt.Errorf("cloud provider could not be initialized for using cloud provided KMS: %v", err)
-			}
-			envelopeService := cloud.KMS()
-			if envelopeService != nil {
-				return result, fmt.Errorf("cloud %q does not provide an implementation of KMS", cloud.ProviderName())
-			}
-			transformer, err = getEnvelopePrefixTransformer(provider.Envelope, envelopeService)
+			transformer, err = getEnvelopePrefixTransformer(provider.CloudProvidedKMS, cloudProvider)
 			found = true
 		}
 
@@ -285,10 +277,24 @@ func getSecretboxPrefixTransformer(config *SecretboxConfig) (value.PrefixTransfo
 
 // getEnvelopePrefixTransformer returns a prefix transformer from the provided config.
 // envelopeService is used as the root of trust.
-func getEnvelopePrefixTransformer(config *EnvelopeConfig, envelopeService envelope.Service) (value.PrefixTransformer, error) {
-	kind := config.Kind
-	if len(kind) == 0 {
-		return value.PrefixTransformer{}, fmt.Errorf("no valid provider-name (kind) found for KMS transformer provider")
+func getEnvelopePrefixTransformer(config *CloudProvidedKMSConfig, cloudProvider *kubeoptions.CloudProviderOptions) (value.PrefixTransformer, error) {
+	result := value.PrefixTransformer{}
+	cloud, err := cloudprovider.InitCloudProvider(cloudProvider.CloudProvider, cloudProvider.CloudConfigFile)
+	if err != nil {
+		return result, fmt.Errorf("cloud provider could not be initialized for using cloud provided KMS: %v", err)
+	}
+	if cloud == nil {
+		return result, fmt.Errorf("no cloud provided for use with cloud-provided KMS")
+	}
+	if len(config.Name) == 0 {
+		return result, fmt.Errorf("no cloud provided KMS name provided")
+	}
+	envelopeService, err := cloud.KMS(config.Name)
+	if err != nil {
+		return result, err
+	}
+	if envelopeService == nil {
+		return result, fmt.Errorf("cloud %q does not provide an implementation of KMS", cloud.ProviderName())
 	}
 
 	envelopeTransformer, err := envelope.NewEnvelopeTransformer(envelopeService, config.CacheSize)
@@ -297,6 +303,6 @@ func getEnvelopePrefixTransformer(config *EnvelopeConfig, envelopeService envelo
 	}
 	return value.PrefixTransformer{
 		Transformer: envelopeTransformer,
-		Prefix:      []byte(envelopeTransformerPrefixV1 + kind + ":"),
+		Prefix:      []byte(envelopeTransformerPrefixV1 + config.Name + ":"),
 	}, nil
 }

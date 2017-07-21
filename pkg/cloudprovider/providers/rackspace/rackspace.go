@@ -41,6 +41,7 @@ import (
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
 )
@@ -758,4 +759,9 @@ func (rs *Rackspace) DisksAreAttached(instanceID string, volumeIDs []string) (ma
 // query if we should trust the cinder provide deviceName, See issue #33128
 func (rs *Rackspace) ShouldTrustDevicePath() bool {
 	return true
+}
+
+// KMS provides a key management service supported by the cloud.
+func (rs *Rackspace) KMS(string) (envelope.Service, error) {
+	return nil, nil
 }

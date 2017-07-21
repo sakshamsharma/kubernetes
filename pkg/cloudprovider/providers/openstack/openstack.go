@@ -28,6 +28,8 @@ import (
 	"strings"
 	"time"
 
+	gcfg "gopkg.in/gcfg.v1"
+
 	"github.com/gophercloud/gophercloud"
 	"github.com/gophercloud/gophercloud/openstack"
 	apiversions_v1 "github.com/gophercloud/gophercloud/openstack/blockstorage/v1/apiversions"
@@ -36,12 +38,12 @@ import (
 	tokens3 "github.com/gophercloud/gophercloud/openstack/identity/v3/tokens"
 	"github.com/gophercloud/gophercloud/pagination"
 	"github.com/mitchellh/mapstructure"
-	"gopkg.in/gcfg.v1"
 
 	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	netutil "k8s.io/apimachinery/pkg/util/net"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 	certutil "k8s.io/client-go/util/cert"
 	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
 	"k8s.io/kubernetes/pkg/cloudprovider"
@@ -667,4 +669,8 @@ func (os *OpenStack) volumeService(forceVersion string) (volumeService, error) {
 		glog.Warningf(err_txt)
 		return nil, errors.New(err_txt)
 	}
+}
+
+func (os *OpenStack) KMS(string) (envelope.Service, error) {
+	return nil, nil
 }

@@ -49,6 +49,7 @@ import (
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	k8runtime "k8s.io/apimachinery/pkg/util/runtime"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
@@ -700,6 +701,11 @@ func (vs *VSphere) Routes() (cloudprovider.Routes, bool) {
 // ScrubDNS filters DNS settings for pods.
 func (vs *VSphere) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []string) {
 	return nameservers, searches
+}
+
+// KMS provides a key management service supported by the cloud.
+func (vs *VSphere) KMS(string) (envelope.Service, error) {
+	return nil, nil
 }
 
 // Returns vSphere objects virtual machine, virtual device list, datastore and datacenter.

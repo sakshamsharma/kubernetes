@@ -20,9 +20,11 @@ import (
 	"fmt"
 	"io"
 
+	gcfg "gopkg.in/gcfg.v1"
+
 	"github.com/golang/glog"
 	"github.com/xanzy/go-cloudstack/cloudstack"
-	"gopkg.in/gcfg.v1"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 	"k8s.io/kubernetes/pkg/cloudprovider"
 	"k8s.io/kubernetes/pkg/controller"
 )
@@ -118,6 +120,11 @@ func (cs *CSCloud) ProviderName() string {
 // ScrubDNS filters DNS settings for pods.
 func (cs *CSCloud) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []string) {
 	return nameservers, searches
+}
+
+// KMS returns a key management service supported by the cloud.
+func (cs *CSCloud) KMS(string) (envelope.Service, error) {
+	return nil, nil
 }
 
 // GetZone returns the Zone containing the region that the program is running in.
