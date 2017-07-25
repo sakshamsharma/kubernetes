@@ -34,9 +34,10 @@ import (
 	"os/exec"
 	"strings"
 
+	gcfg "gopkg.in/gcfg.v1"
+
 	"github.com/golang/glog"
 	"github.com/vmware/photon-controller-go-sdk/photon"
-	"gopkg.in/gcfg.v1"
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
@@ -537,6 +538,11 @@ func (pc *PCCloud) Routes() (cloudprovider.Routes, bool) {
 // ScrubDNS filters DNS settings for pods.
 func (pc *PCCloud) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []string) {
 	return nameservers, searches
+}
+
+// KeyManagementService provides a named key management service supported by the cloud.
+func (pc *PCCloud) KeyManagementService(name string) (cloudprovider.KeyManagementServices, error) {
+	return nil, nil
 }
 
 // Attaches given virtual disk volume to the compute running kubelet.

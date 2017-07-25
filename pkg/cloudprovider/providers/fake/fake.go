@@ -111,6 +111,11 @@ func (f *FakeCloud) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []s
 	return nameservers, searches
 }
 
+// KeyManagementService provides a named key management service supported by the cloud.
+func (f *FakeCloud) KeyManagementService(name string) (cloudprovider.KeyManagementServices, error) {
+	return nil, nil
+}
+
 // LoadBalancer returns a fake implementation of LoadBalancer.
 // Actually it just returns f itself.
 func (f *FakeCloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {

@@ -27,7 +27,7 @@ import (
 	"regexp"
 	"time"
 
-	"gopkg.in/gcfg.v1"
+	gcfg "gopkg.in/gcfg.v1"
 
 	"github.com/golang/glog"
 	"github.com/rackspace/gophercloud"
@@ -527,6 +527,11 @@ func (os *Rackspace) ProviderName() string {
 // ScrubDNS filters DNS settings for pods.
 func (os *Rackspace) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []string) {
 	return nameservers, searches
+}
+
+// KeyManagementService provides a named key management service supported by the cloud.
+func (os *Rackspace) KeyManagementService(name string) (cloudprovider.KeyManagementServices, error) {
+	return nil, nil
 }
 
 func (os *Rackspace) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
