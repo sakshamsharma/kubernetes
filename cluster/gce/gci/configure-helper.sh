@@ -408,6 +408,16 @@ EOF
 subnetwork-name = ${NODE_SUBNETWORK}
 EOF
     fi
+
+    # Assign variables needed to use a Google Cloud KMS key.
+    # They need not be provided by the cloud, and thus default to empty fields
+    # so the cloud configuration can get parsed by gcfg without an error.
+    # Missing values will be handled by kms.go.
+    cat <<EOF >>/etc/gce.conf
+kms-location = ${GKMS_LOCATION:-}
+kms-keyring = ${GKMS_KEYRING:-}
+kms-cryptokey = ${GKMS_CRYPTOKEY:-}
+EOF
   fi
   if [[ -n "${NODE_INSTANCE_PREFIX:-}" ]]; then
     use_cloud_config="true"

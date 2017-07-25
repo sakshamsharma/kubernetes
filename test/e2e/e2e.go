@@ -89,7 +89,9 @@ func setupProviderConfig() error {
 			NodeTags:           nil,
 			NodeInstancePrefix: "",
 			TokenSource:        nil,
-			UseMetadataServer:  false})
+			UseMetadataServer:  false,
+			KMSConfig:          nil,
+		})
 
 		if err != nil {
 			return fmt.Errorf("Error building GCE/GKE provider: %v", err)

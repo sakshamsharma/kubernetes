@@ -17,10 +17,11 @@ limitations under the License.
 package gce
 
 import (
-	"golang.org/x/oauth2/google"
 	"reflect"
 	"strings"
 	"testing"
+
+	"golang.org/x/oauth2/google"
 )
 
 func TestExtraKeyInConfig(t *testing.T) {
@@ -270,6 +271,9 @@ func TestGenerateCloudConfigs(t *testing.T) {
 		ApiEndpoint        string
 		LocalZone          string
 		cloudConfig        *CloudConfig
+		Location           string
+		KeyRing            string
+		CryptoKey          string
 	}{
 		{
 			TokenURL:           "",
@@ -282,6 +286,9 @@ func TestGenerateCloudConfigs(t *testing.T) {
 			Multizone:          false,
 			ApiEndpoint:        "",
 			LocalZone:          "us-central1-a",
+			Location:           "global",
+			KeyRing:            "google-container-engine",
+			CryptoKey:          "clusterkey",
 			cloudConfig: &CloudConfig{
 				ApiEndpoint:        "",
 				ProjectID:          "project-id",
@@ -294,6 +301,11 @@ func TestGenerateCloudConfigs(t *testing.T) {
 				NodeInstancePrefix: "node-prefix",
 				TokenSource:        google.ComputeTokenSource(""),
 				UseMetadataServer:  true,
+				KMSConfig: &gkmsConfig{
+					Location:  "global",
+					KeyRing:   "google-container-engine",
+					CryptoKey: "clusterkey",
+				},
 			},
 		},
 		// nil token source
@@ -308,6 +320,9 @@ func TestGenerateCloudConfigs(t *testing.T) {
 			Multizone:          false,
 			ApiEndpoint:        "",
 			LocalZone:          "us-central1-a",
+			Location:           "",
+			KeyRing:            "",
+			CryptoKey:          "",
 			cloudConfig: &CloudConfig{
 				ApiEndpoint:        "",
 				ProjectID:          "project-id",
@@ -320,6 +335,7 @@ func TestGenerateCloudConfigs(t *testing.T) {
 				NodeInstancePrefix: "node-prefix",
 				TokenSource:        nil,
 				UseMetadataServer:  true,
+				KMSConfig:          &gkmsConfig{"", "", ""},
 			},
 		},
 		// specified api endpoint
@@ -334,6 +350,9 @@ func TestGenerateCloudConfigs(t *testing.T) {
 			Multizone:          false,
 			ApiEndpoint:        "https://www.googleapis.com/compute/staging_v1/",
 			LocalZone:          "us-central1-a",
+			Location:           "",
+			KeyRing:            "",
+			CryptoKey:          "",
 			cloudConfig: &CloudConfig{
 				ApiEndpoint:        "https://www.googleapis.com/compute/staging_v1/",
 				ProjectID:          "project-id",
@@ -346,6 +365,7 @@ func TestGenerateCloudConfigs(t *testing.T) {
 				NodeInstancePrefix: "node-prefix",
 				TokenSource:        google.ComputeTokenSource(""),
 				UseMetadataServer:  true,
+				KMSConfig:          &gkmsConfig{"", "", ""},
 			},
 		},
 		// empty subnet-name
@@ -360,6 +380,9 @@ func TestGenerateCloudConfigs(t *testing.T) {
 			Multizone:          false,
 			ApiEndpoint:        "",
 			LocalZone:          "us-central1-a",
+			Location:           "",
+			KeyRing:            "",
+			CryptoKey:          "",
 			cloudConfig: &CloudConfig{
 				ApiEndpoint:        "",
 				ProjectID:          "project-id",
@@ -372,6 +395,7 @@ func TestGenerateCloudConfigs(t *testing.T) {
 				NodeInstancePrefix: "node-prefix",
 				TokenSource:        google.ComputeTokenSource(""),
 				UseMetadataServer:  true,
+				KMSConfig:          &gkmsConfig{"", "", ""},
 			},
 		},
 		// multi zone
@@ -386,6 +410,9 @@ func TestGenerateCloudConfigs(t *testing.T) {
 			Multizone:          true,
 			ApiEndpoint:        "",
 			LocalZone:          "us-central1-a",
+			Location:           "",
+			KeyRing:            "",
+			CryptoKey:          "",
 			cloudConfig: &CloudConfig{
 				ApiEndpoint:        "",
 				ProjectID:          "project-id",
@@ -398,6 +425,7 @@ func TestGenerateCloudConfigs(t *testing.T) {
 				NodeInstancePrefix: "node-prefix",
 				TokenSource:        google.ComputeTokenSource(""),
 				UseMetadataServer:  true,
+				KMSConfig:          &gkmsConfig{"", "", ""},
 			},
 		},
 	}
@@ -415,6 +443,9 @@ func TestGenerateCloudConfigs(t *testing.T) {
 				Multizone          bool     `gcfg:"multizone"`
 				ApiEndpoint        string   `gcfg:"api-endpoint"`
 				LocalZone          string   `gcfg:"local-zone"`
+				Location           string   `gcfg:"kms-location,omitempty"`
+				KeyRing            string   `gcfg:"kms-keyring"`
+				CryptoKey          string   `gcfg:"kms-cryptokey"`
 			}{
 				TokenURL:           tc.TokenURL,
 				TokenBody:          tc.TokenBody,
@@ -426,6 +457,9 @@ func TestGenerateCloudConfigs(t *testing.T) {
 				Multizone:          tc.Multizone,
 				ApiEndpoint:        tc.ApiEndpoint,
 				LocalZone:          tc.LocalZone,
+				Location:           tc.Location,
+				KeyRing:            tc.KeyRing,
+				CryptoKey:          tc.CryptoKey,
 			},
 		})
 		if err != nil {

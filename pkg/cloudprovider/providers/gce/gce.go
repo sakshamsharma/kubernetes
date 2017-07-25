@@ -113,6 +113,7 @@ type GCECloud struct {
 	// lock to prevent shared resources from being prematurely deleted while the operation is
 	// in progress.
 	sharedResourceLock sync.Mutex
+	kmsConfig          *gkmsConfig
 }
 
 type ServiceManager interface {
@@ -146,6 +147,13 @@ type ConfigFile struct {
 		// Specifying ApiEndpoint will override the default GCE compute API endpoint.
 		ApiEndpoint string `gcfg:"api-endpoint"`
 		LocalZone   string `gcfg:"local-zone"`
+		// location is the KMS location of the KeyRing to be used for encryption. The default value is "global". // It can be found by checking the available KeyRings in the IAM UI.
+		// This is not the same as the GCP location of the project.
+		Location string `gcfg:"kms-location,omitempty"`
+		// keyRing is the keyRing of the hosted key to be used. The default value is "google-kubernetes".
+		KeyRing string `gcfg:"kms-keyring"`
+		// cryptoKey is the name of the key to be used for encryption of Data-Encryption-Keys.
+		CryptoKey string `gcfg:"kms-cryptokey"`
 	}
 }
 
@@ -162,6 +170,7 @@ type CloudConfig struct {
 	NodeInstancePrefix string
 	TokenSource        oauth2.TokenSource
 	UseMetadataServer  bool
+	KMSConfig          *gkmsConfig
 }
 
 func init() {
@@ -222,6 +231,7 @@ func generateCloudConfig(configFile *ConfigFile) (cloudConfig *CloudConfig, err 
 	// By default, fetch token from GCE metadata server
 	cloudConfig.TokenSource = google.ComputeTokenSource("")
 	cloudConfig.UseMetadataServer = true
+	kmsConfig := &gkmsConfig{}
 
 	if configFile != nil {
 		if configFile.Global.ApiEndpoint != "" {
@@ -256,6 +266,11 @@ func generateCloudConfig(configFile *ConfigFile) (cloudConfig *CloudConfig, err 
 		if configFile.Global.LocalZone != "" {
 			cloudConfig.Zone = configFile.Global.LocalZone
 		}
+
+		kmsConfig.Location = configFile.Global.Location
+		kmsConfig.KeyRing = configFile.Global.KeyRing
+		kmsConfig.CryptoKey = configFile.Global.CryptoKey
+		cloudConfig.KMSConfig = kmsConfig
 	}
 
 	// retrieve region
@@ -296,12 +311,11 @@ func generateCloudConfig(configFile *ConfigFile) (cloudConfig *CloudConfig, err 
 	return cloudConfig, err
 }
 
-// Creates a GCECloud object using the specified parameters.
+// CreateGCECloud creates a GCECloud object using the specified parameters.
 // If no networkUrl is specified, loads networkName via rest call.
 // If no tokenSource is specified, uses oauth2.DefaultTokenSource.
 // If managedZones is nil / empty all zones in the region will be managed.
 func CreateGCECloud(config *CloudConfig) (*GCECloud, error) {
-
 	client, err := newOauthClient(config.TokenSource)
 	if err != nil {
 		return nil, err
@@ -393,6 +407,7 @@ func CreateGCECloud(config *CloudConfig) (*GCECloud, error) {
 		nodeInstancePrefix:       config.NodeInstancePrefix,
 		useMetadataServer:        config.UseMetadataServer,
 		operationPollRateLimiter: operationPollRateLimiter,
+		kmsConfig:                config.KMSConfig,
 	}
 
 	gce.manager = &GCEServiceManager{gce}
