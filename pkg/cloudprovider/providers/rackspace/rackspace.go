@@ -27,7 +27,7 @@ import (
 	"regexp"
 	"time"
 
-	"gopkg.in/gcfg.v1"
+	gcfg "gopkg.in/gcfg.v1"
 
 	"github.com/golang/glog"
 	"github.com/rackspace/gophercloud"
@@ -532,6 +532,11 @@ func (os *Rackspace) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []
 // HasClusterID returns true if the cluster has a clusterID
 func (os *Rackspace) HasClusterID() bool {
 	return true
+}
+
+// KeyManagementService provides a named key management service supported by the cloud.
+func (os *Rackspace) KeyManagementService(name string) (cloudprovider.KeyManagementService, error) {
+	return nil, fmt.Errorf("cloud %q does not support KeyManagementService %q", os.ProviderName(), name)
 }
 
 func (os *Rackspace) LoadBalancer() (cloudprovider.LoadBalancer, bool) {

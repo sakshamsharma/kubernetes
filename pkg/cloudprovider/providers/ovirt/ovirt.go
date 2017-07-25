@@ -29,7 +29,7 @@ import (
 	"sort"
 	"strings"
 
-	"gopkg.in/gcfg.v1"
+	gcfg "gopkg.in/gcfg.v1"
 
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -137,6 +137,11 @@ func (v *OVirtCloud) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []
 // HasClusterID returns true if the cluster has a clusterID
 func (v *OVirtCloud) HasClusterID() bool {
 	return true
+}
+
+// KeyManagementService provides a named key management service supported by the cloud.
+func (v *OVirtCloud) KeyManagementService(name string) (cloudprovider.KeyManagementService, error) {
+	return nil, fmt.Errorf("cloud %q does not support KeyManagementService %q", v.ProviderName(), name)
 }
 
 // LoadBalancer returns an implementation of LoadBalancer for oVirt cloud

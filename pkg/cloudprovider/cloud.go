@@ -47,6 +47,9 @@ type Interface interface {
 	ScrubDNS(nameservers, searches []string) (nsOut, srchOut []string)
 	// HasClusterID returns true if a ClusterID is required and set
 	HasClusterID() bool
+	// KeyManagementService provides a named key management service supported by the cloud. Returns an error
+	// if the named provider was not found.
+	KeyManagementService(name string) (KeyManagementService, error)
 }
 
 // Clusters is an abstract, pluggable interface for clusters of containers.

@@ -951,6 +951,11 @@ func (c *Cloud) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []strin
 	return nameservers, searches
 }
 
+// KeyManagementService provides a named key management service supported by the cloud.
+func (c *Cloud) KeyManagementService(name string) (cloudprovider.KeyManagementService, error) {
+	return nil, fmt.Errorf("cloud %q does not support KeyManagementService %q", c.ProviderName(), name)
+}
+
 // LoadBalancer returns an implementation of LoadBalancer for Amazon Web Services.
 func (c *Cloud) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
 	return c, true

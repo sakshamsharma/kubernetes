@@ -34,9 +34,10 @@ import (
 	"os/exec"
 	"strings"
 
+	gcfg "gopkg.in/gcfg.v1"
+
 	"github.com/golang/glog"
 	"github.com/vmware/photon-controller-go-sdk/photon"
-	"gopkg.in/gcfg.v1"
 	"k8s.io/api/core/v1"
 	k8stypes "k8s.io/apimachinery/pkg/types"
 	v1helper "k8s.io/kubernetes/pkg/api/v1/helper"
@@ -542,6 +543,11 @@ func (pc *PCCloud) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []st
 // HasClusterID returns true if the cluster has a clusterID
 func (pc *PCCloud) HasClusterID() bool {
 	return true
+}
+
+// KeyManagementService provides a named key management service supported by the cloud.
+func (pc *PCCloud) KeyManagementService(name string) (cloudprovider.KeyManagementService, error) {
+	return nil, fmt.Errorf("cloud %q does not support KeyManagementService %q", pc.ProviderName(), name)
 }
 
 // Attaches given virtual disk volume to the compute running kubelet.
