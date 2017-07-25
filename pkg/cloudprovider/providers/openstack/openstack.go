@@ -28,6 +28,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/golang/glog"
 	"github.com/gophercloud/gophercloud"
 	"github.com/gophercloud/gophercloud/openstack"
 	apiversions_v1 "github.com/gophercloud/gophercloud/openstack/blockstorage/v1/apiversions"
@@ -38,7 +39,6 @@ import (
 	"github.com/mitchellh/mapstructure"
 	"gopkg.in/gcfg.v1"
 
-	"github.com/golang/glog"
 	"k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/types"
 	netutil "k8s.io/apimachinery/pkg/util/net"
@@ -456,6 +456,11 @@ func (os *OpenStack) ProviderName() string {
 // ScrubDNS filters DNS settings for pods.
 func (os *OpenStack) ScrubDNS(nameServers, searches []string) ([]string, []string) {
 	return nameServers, searches
+}
+
+// KeyManagementService provides a named key management service supported by the cloud.
+func (os *OpenStack) KeyManagementService(name string) (cloudprovider.KeyManagementService, error) {
+	return nil, nil
 }
 
 func (os *OpenStack) LoadBalancer() (cloudprovider.LoadBalancer, bool) {
