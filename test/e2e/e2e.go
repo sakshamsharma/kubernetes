@@ -76,7 +76,7 @@ func setupProviderConfig() error {
 		cloudConfig.Provider, err = gcecloud.CreateGCECloud(framework.TestContext.CloudConfig.ApiEndpoint,
 			framework.TestContext.CloudConfig.ProjectID,
 			region, zone, managedZones, "" /* networkUrl */, "" /* subnetworkUrl */, nil, /* nodeTags */
-			"" /* nodeInstancePerfix */, nil /* tokenSource */, false /* useMetadataServer */)
+			"" /* nodeInstancePerfix */, nil /* tokenSource */, false /* useMetadataServer */, nil /* kmsConfig */)
 		if err != nil {
 			return fmt.Errorf("Error building GCE/GKE provider: %v", err)
 		}
