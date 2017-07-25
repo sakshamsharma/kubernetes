@@ -45,6 +45,9 @@ type Interface interface {
 	ProviderName() string
 	// ScrubDNS provides an opportunity for cloud-provider-specific code to process DNS settings for pods.
 	ScrubDNS(nameservers, searches []string) (nsOut, srchOut []string)
+	// KeyManagementService provides a named key management service supported by the cloud. Returns an error
+	// if the named provider was not found.
+	KeyManagementService(name string) (KeyManagementService, error)
 }
 
 // Clusters is an abstract, pluggable interface for clusters of containers.
