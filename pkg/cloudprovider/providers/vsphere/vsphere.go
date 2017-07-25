@@ -31,7 +31,7 @@ import (
 	"sync"
 	"time"
 
-	"gopkg.in/gcfg.v1"
+	gcfg "gopkg.in/gcfg.v1"
 
 	"github.com/golang/glog"
 	"github.com/vmware/govmomi"
@@ -700,6 +700,11 @@ func (vs *VSphere) Routes() (cloudprovider.Routes, bool) {
 // ScrubDNS filters DNS settings for pods.
 func (vs *VSphere) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []string) {
 	return nameservers, searches
+}
+
+// KeyManagementService provides a named key management service supported by the cloud.
+func (vs *VSphere) KeyManagementService(name string) (cloudprovider.KeyManagementService, error) {
+	return nil, fmt.Errorf("cloud %q does not support KeyManagementService %q", vs.ProviderName(), name)
 }
 
 // Returns vSphere objects virtual machine, virtual device list, datastore and datacenter.

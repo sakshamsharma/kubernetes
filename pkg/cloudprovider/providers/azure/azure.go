@@ -382,6 +382,11 @@ func (az *Cloud) ScrubDNS(nameservers, searches []string) (nsOut, srchOut []stri
 	return nameservers, searches
 }
 
+// KeyManagementService provides a named key management service supported by the cloud.
+func (az *Cloud) KeyManagementService(name string) (cloudprovider.KeyManagementService, error) {
+	return nil, fmt.Errorf("cloud %q does not support KeyManagementService %q", az.ProviderName(), name)
+}
+
 // ProviderName returns the cloud provider ID.
 func (az *Cloud) ProviderName() string {
 	return CloudProviderName
