@@ -36,6 +36,7 @@ go_library(
         "gce_urlmap.go",
         "gce_util.go",
         "gce_zones.go",
+        "kms.go",
         "metrics.go",
         "token_source.go",
     ],
