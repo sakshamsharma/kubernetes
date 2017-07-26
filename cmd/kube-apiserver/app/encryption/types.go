@@ -76,13 +76,9 @@ type IdentityConfig struct{}
 // CloudProvidedKMSConfig contains the configuration for an envelope transformer which uses
 // the KMS provided by the host cloud as the root of trust.
 type CloudProvidedKMSConfig struct {
-	// kind is the name of the cloudkms Service provider to be used.
-	Kind string `json:"kind,omitempty"`
-	// apiVersion is the API version this block has to be parsed as.
-	APIVersion string `json:"apiVersion"`
 	// cacheSize is the maximum number of secrets which are cached in memory. The default value is 1000.
 	// +optional
-	CacheSize int `json:"cacheSize,omitempty"`
+	CacheSize int `json:"cachesize,omitempty"`
 	// name is the name of the KMS service to be used, helpful for clouds which may provide
 	// multiple KMS services.
 	Name string `json:"name,omitempty"`

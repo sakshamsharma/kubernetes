@@ -18,11 +18,14 @@ package encryption
 
 import (
 	"bytes"
+	"encoding/base64"
+	"fmt"
 	"strings"
 	"testing"
 
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 )
 
 const (
@@ -51,6 +54,9 @@ resources:
           secret: c2VjcmV0IGlzIHNlY3VyZQ==
         - name: key2
           secret: dGhpcyBpcyBwYXNzd29yZA==
+    - cloudprovidedkms:
+        name: google-cloudkms
+        cachesize: 10
     - secretbox:
         keys:
         - name: key1
@@ -70,6 +76,9 @@ resources:
           secret: c2VjcmV0IGlzIHNlY3VyZQ==
         - name: key2
           secret: dGhpcyBpcyBwYXNzd29yZA==
+    - cloudprovidedkms:
+        name: google-cloudkms
+        cachesize: 10
     - secretbox:
         keys:
         - name: key1
@@ -101,6 +110,9 @@ resources:
         keys:
         - name: key1
           secret: YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=
+    - cloudprovidedkms:
+        name: google-cloudkms
+        cachesize: 10
     - aesgcm:
         keys:
         - name: key1
@@ -127,12 +139,44 @@ resources:
         - name: key2
           secret: dGhpcyBpcyBwYXNzd29yZA==
     - identity: {}
+    - cloudprovidedkms:
+        name: google-cloudkms
+        cachesize: 10
     - aesgcm:
         keys:
         - name: key1
           secret: c2VjcmV0IGlzIHNlY3VyZQ==
         - name: key2
           secret: dGhpcyBpcyBwYXNzd29yZA==
+`
+	correctConfigWithCloudProvidedKMSFirst = `
+kind: EncryptionConfig
+apiVersion: v1
+resources:
+  - resources:
+    - secrets
+    - namespaces
+    providers:
+    - cloudprovidedkms:
+        name: google-cloudkms
+        cachesize: 10
+    - aesgcm:
+        keys:
+        - name: key1
+          secret: c2VjcmV0IGlzIHNlY3VyZQ==
+        - name: key2
+          secret: dGhpcyBpcyBwYXNzd29yZA==
+    - identity: {}
+    - aescbc:
+        keys:
+        - name: key1
+          secret: c2VjcmV0IGlzIHNlY3VyZQ==
+        - name: key2
+          secret: dGhpcyBpcyBwYXNzd29yZA==
+    - secretbox:
+        keys:
+        - name: key1
+          secret: YWJjZGVmZ2hpamtsbW5vcHFyc3R1dnd4eXoxMjM0NTY=
 `
 
 	incorrectConfigNoSecretForKey = `
@@ -165,28 +209,64 @@ resources:
 `
 )
 
+// testEnvelopeService is a mock envelope service which can be used to simulate remote Envelope services
+// for testing of the envelope transformer with other transformers.
+type testEnvelopeService struct {
+	disabled bool
+}
+
+func (t *testEnvelopeService) Decrypt(data string) ([]byte, error) {
+	if t.disabled {
+		return nil, fmt.Errorf("Envelope service was disabled")
+	}
+	return base64.StdEncoding.DecodeString(data)
+}
+
+func (t *testEnvelopeService) Encrypt(data []byte) (string, error) {
+	if t.disabled {
+		return "", fmt.Errorf("Envelope service was disabled")
+	}
+	return base64.StdEncoding.EncodeToString(data), nil
+}
+
+func (t *testEnvelopeService) SetDisabledStatus(status bool) {
+	t.disabled = status
+}
+
+var _ envelope.Service = &testEnvelopeService{}
+
 func TestEncryptionProviderConfigCorrect(t *testing.T) {
+	envelopeService := &testEnvelopeService{}
+	serviceGetter := func(_ string) (envelope.Service, error) {
+		return envelopeService, nil
+	}
+
 	// Creates compound/prefix transformers with different ordering of available transformers.
 	// Transforms data using one of them, and tries to untransform using the others.
 	// Repeats this for all possible combinations.
-	identityFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithIdentityFirst))
+	identityFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithIdentityFirst), serviceGetter)
 	if err != nil {
 		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithIdentityFirst)
 	}
 
-	aesGcmFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithAesGcmFirst))
+	aesGcmFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithAesGcmFirst), serviceGetter)
 	if err != nil {
 		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithAesGcmFirst)
 	}
 
-	aesCbcFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithAesCbcFirst))
+	aesCbcFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithAesCbcFirst), serviceGetter)
 	if err != nil {
 		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithAesCbcFirst)
 	}
 
-	secretboxFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithSecretboxFirst))
+	secretboxFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithSecretboxFirst), serviceGetter)
 	if err != nil {
 		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithSecretboxFirst)
+	}
+
+	cloudProvidedKMSFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithCloudProvidedKMSFirst), serviceGetter)
+	if err != nil {
+		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithCloudProvidedKMSFirst)
 	}
 
 	// Pick the transformer for any of the returned resources.
@@ -194,6 +274,7 @@ func TestEncryptionProviderConfigCorrect(t *testing.T) {
 	aesGcmFirstTransformer := aesGcmFirstTransformerOverrides[schema.ParseGroupResource("secrets")]
 	aesCbcFirstTransformer := aesCbcFirstTransformerOverrides[schema.ParseGroupResource("secrets")]
 	secretboxFirstTransformer := secretboxFirstTransformerOverrides[schema.ParseGroupResource("secrets")]
+	cloudProvidedKMSFirstTransformer := cloudProvidedKMSFirstTransformerOverrides[schema.ParseGroupResource("secrets")]
 
 	context := value.DefaultContext([]byte(sampleContextText))
 	originalText := []byte(sampleText)
@@ -206,6 +287,7 @@ func TestEncryptionProviderConfigCorrect(t *testing.T) {
 		{aesCbcFirstTransformer, "aesCbcFirst"},
 		{secretboxFirstTransformer, "secretboxFirst"},
 		{identityFirstTransformer, "identityFirst"},
+		{cloudProvidedKMSFirstTransformer, "cloudProvidedKMSFirst"},
 	}
 
 	for _, testCase := range transformers {
@@ -232,14 +314,14 @@ func TestEncryptionProviderConfigCorrect(t *testing.T) {
 
 // Throw error if key has no secret
 func TestEncryptionProviderConfigNoSecretForKey(t *testing.T) {
-	if _, err := ParseEncryptionConfiguration(strings.NewReader(incorrectConfigNoSecretForKey)); err == nil {
+	if _, err := ParseEncryptionConfiguration(strings.NewReader(incorrectConfigNoSecretForKey), nil); err == nil {
 		t.Fatalf("invalid configuration file (one key has no secret) got parsed:\n%s", incorrectConfigNoSecretForKey)
 	}
 }
 
 // Throw error if invalid key for AES
 func TestEncryptionProviderConfigInvalidKey(t *testing.T) {
-	if _, err := ParseEncryptionConfiguration(strings.NewReader(incorrectConfigInvalidKey)); err == nil {
+	if _, err := ParseEncryptionConfiguration(strings.NewReader(incorrectConfigInvalidKey), nil); err == nil {
 		t.Fatalf("invalid configuration file (bad AES key) got parsed:\n%s", incorrectConfigInvalidKey)
 	}
 }

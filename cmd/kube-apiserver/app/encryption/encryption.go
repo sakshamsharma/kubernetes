@@ -31,8 +31,10 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apiserver/pkg/storage/value"
 	aestransformer "k8s.io/apiserver/pkg/storage/value/encrypt/aes"
+	"k8s.io/kubernetes/pkg/cloudprovider"
 	kubeoptions "k8s.io/kubernetes/pkg/kubeapiserver/options"
 
+	"k8s.io/apiserver/pkg/storage/value/encrypt/envelope"
 	"k8s.io/apiserver/pkg/storage/value/encrypt/identity"
 	"k8s.io/apiserver/pkg/storage/value/encrypt/secretbox"
 )
@@ -41,7 +43,12 @@ const (
 	aesCBCTransformerPrefixV1    = "k8s:enc:aescbc:v1:"
 	aesGCMTransformerPrefixV1    = "k8s:enc:aesgcm:v1:"
 	secretboxTransformerPrefixV1 = "k8s:enc:secretbox:v1:"
+	envelopeTransformerPrefixV1  = "k8s:enc:envelope:v1:"
 )
+
+// cloudKMSFunc returns the named KMS provider as an envelope service, if provided by the cloud.
+// This indirection is helpful for making unit tests.
+type cloudKMSFunc func(name string) (envelope.Service, error)
 
 // GetTransformerOverrides returns the transformer overrides by reading and parsing the encryption provider configuration file.
 // It takes cloud provider options as argument, which are used if a KMS based encryption backend is used.
@@ -52,7 +59,18 @@ func GetTransformerOverrides(encryptionConfigFilePath string, cloudProvider *kub
 	}
 	defer f.Close()
 
-	result, err := ParseEncryptionConfiguration(f)
+	// Construct a function to return the named cloud provided KMS provider if needed.
+	cloudKMSFunc := func(name string) (envelope.Service, error) {
+		cloud, err := cloudprovider.InitCloudProvider(cloudProvider.CloudProvider, cloudProvider.CloudConfigFile)
+		if err != nil {
+			return nil, fmt.Errorf("cloud provider could not be initialized for using cloud provided KMS: %v", err)
+		}
+		if cloud == nil {
+			return nil, fmt.Errorf("no cloud provided for use with cloud-provided KMS")
+		}
+		return cloud.KeyManagementService(name)
+	}
+	result, err := ParseEncryptionConfiguration(f, cloudKMSFunc)
 
 	if err != nil {
 		return nil, fmt.Errorf("error while parsing encryption provider configuration file %q: %v", encryptionConfigFilePath, err)
@@ -60,8 +78,9 @@ func GetTransformerOverrides(encryptionConfigFilePath string, cloudProvider *kub
 	return result, nil
 }
 
-// ParseEncryptionConfiguration parses configuration data and returns the transformer overrides.
-func ParseEncryptionConfiguration(f io.Reader) (map[schema.GroupResource]value.Transformer, error) {
+// ParseEncryptionConfiguration parses configuration data and returns the transformer overrides. Uses cloudKMSFunc
+// to fetch a cloud-provided KMS provider if required.
+func ParseEncryptionConfiguration(f io.Reader, cloudKMSFunc cloudKMSFunc) (map[schema.GroupResource]value.Transformer, error) {
 	configFileContents, err := ioutil.ReadAll(f)
 	if err != nil {
 		return nil, fmt.Errorf("could not read contents: %v", err)
@@ -79,13 +98,12 @@ func ParseEncryptionConfiguration(f io.Reader) (map[schema.GroupResource]value.T
 	if config.Kind == "" {
 		return nil, fmt.Errorf("invalid configuration file, missing Kind")
 	}
-	// TODO config.APIVersion is unchecked
 
 	resourceToPrefixTransformer := map[schema.GroupResource][]value.PrefixTransformer{}
 
 	// For each entry in the configuration
 	for _, resourceConfig := range config.Resources {
-		transformers, err := GetPrefixTransformers(&resourceConfig)
+		transformers, err := GetPrefixTransformers(&resourceConfig, cloudKMSFunc)
 		if err != nil {
 			return nil, err
 		}
@@ -106,7 +124,7 @@ func ParseEncryptionConfiguration(f io.Reader) (map[schema.GroupResource]value.T
 }
 
 // GetPrefixTransformers constructs and returns the appropriate prefix transformers for the passed resource using its configuration
-func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, error) {
+func GetPrefixTransformers(config *ResourceConfig, cloudKMSFunc cloudKMSFunc) ([]value.PrefixTransformer, error) {
 	var result []value.PrefixTransformer
 	multipleProviderError := fmt.Errorf("more than one encryption provider specified in a single element, should split into different list elements")
 	for _, provider := range config.Providers {
@@ -136,6 +154,14 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 				return result, multipleProviderError
 			}
 			transformer, err = getSecretboxPrefixTransformer(provider.Secretbox)
+			found = true
+		}
+
+		if provider.CloudProvidedKMS != nil {
+			if found == true {
+				return result, multipleProviderError
+			}
+			transformer, err = getEnvelopePrefixTransformer(provider.CloudProvidedKMS, cloudKMSFunc)
 			found = true
 		}
 
@@ -263,4 +289,29 @@ func getSecretboxPrefixTransformer(config *SecretboxConfig) (value.PrefixTransfo
 		Prefix:      []byte(secretboxTransformerPrefixV1),
 	}
 	return result, nil
+}
+
+// getEnvelopePrefixTransformer returns a prefix transformer from the provided config.
+// envelopeService is used as the root of trust.
+func getEnvelopePrefixTransformer(config *CloudProvidedKMSConfig, cloudKMSFunc cloudKMSFunc) (value.PrefixTransformer, error) {
+	result := value.PrefixTransformer{}
+	if len(config.Name) == 0 {
+		return result, fmt.Errorf("no cloud provided KMS name provided")
+	}
+	envelopeService, err := cloudKMSFunc(config.Name)
+	if err != nil {
+		return result, err
+	}
+	if envelopeService == nil {
+		return result, fmt.Errorf("cloud does not provide an implementation of KMS")
+	}
+
+	envelopeTransformer, err := envelope.NewEnvelopeTransformer(envelopeService, config.CacheSize, aestransformer.NewCBCTransformer)
+	if err != nil {
+		return value.PrefixTransformer{}, err
+	}
+	return value.PrefixTransformer{
+		Transformer: envelopeTransformer,
+		Prefix:      []byte(envelopeTransformerPrefixV1 + config.Name + ":"),
+	}, nil
 }

@@ -27,6 +27,7 @@ import (
 )
 
 const (
+	// KMSServiceName is the name of the Key Management Service provided by the cloud.
 	KMSServiceName = "google-cloudkms"
 
 	defaultGKMSKeyRing = "google-kubernetes"
