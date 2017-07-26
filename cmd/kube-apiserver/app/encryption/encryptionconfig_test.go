@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package encryptionconfig
+package encryption
 
 import (
 	"bytes"
@@ -166,10 +166,9 @@ resources:
 )
 
 func TestEncryptionProviderConfigCorrect(t *testing.T) {
-	// Creates two transformers with different ordering of identity and AES transformers.
-	// Transforms data using one of them, and tries to untransform using both of them.
-	// Repeats this for both the possible combinations.
-
+	// Creates compound/prefix transformers with different ordering of available transformers.
+	// Transforms data using one of them, and tries to untransform using the others.
+	// Repeats this for all possible combinations.
 	identityFirstTransformerOverrides, err := ParseEncryptionConfiguration(strings.NewReader(correctConfigWithIdentityFirst))
 	if err != nil {
 		t.Fatalf("error while parsing configuration file: %s.\nThe file was:\n%s", err, correctConfigWithIdentityFirst)

@@ -11,18 +11,32 @@ load(
 go_library(
     name = "go_default_library",
     srcs = [
-        "config.go",
+        "encryption.go",
         "types.go",
     ],
     tags = ["automanaged"],
     deps = [
-        "//vendor/github.com/ghodss/yaml:go_default_library",
+        "//pkg/kubeapiserver/options:go_default_library",
+        "//vendor/gopkg.in/yaml.v2:go_default_library",
         "//vendor/k8s.io/apimachinery/pkg/runtime/schema:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/storage/value:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/storage/value/encrypt/aes:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/storage/value/encrypt/identity:go_default_library",
         "//vendor/k8s.io/apiserver/pkg/storage/value/encrypt/secretbox:go_default_library",
     ],
+)
+
+filegroup(
+    name = "package-srcs",
+    srcs = glob(["**"]),
+    tags = ["automanaged"],
+    visibility = ["//visibility:private"],
+)
+
+filegroup(
+    name = "all-srcs",
+    srcs = [":package-srcs"],
+    tags = ["automanaged"],
 )
 
 go_test(

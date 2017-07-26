@@ -14,10 +14,10 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package encryptionconfig
+package encryption
 
-// EncryptionConfig stores the complete configuration for encryption providers.
-type EncryptionConfig struct {
+// Config stores the complete configuration for encryption providers.
+type Config struct {
 	// kind is the type of configuration file.
 	Kind string `json:"kind"`
 	// apiVersion is the API version this file has to be parsed as.
@@ -45,6 +45,9 @@ type ProviderConfig struct {
 	Secretbox *SecretboxConfig `json:"secretbox,omitempty"`
 	// identity is the (empty) configuration for the identity transformer.
 	Identity *IdentityConfig `json:"identity,omitempty"`
+	// cloudprovidedkms is the common configuration section for all envelope encryption transformers
+	// which use the KMS provided by the cloud the cluster is on.
+	CloudProvidedKMS *CloudProvidedKMSConfig `json:"cloudprovidedkms,omitempty"`
 }
 
 // AESConfig contains the API configuration for an AES transformer.
@@ -53,7 +56,7 @@ type AESConfig struct {
 	Keys []Key `json:"keys"`
 }
 
-// SECRETBOXConfig contains the API configuration for an Secretbox transformer.
+// SecretboxConfig contains the API configuration for an Secretbox transformer.
 type SecretboxConfig struct {
 	// keys is a list of keys to be used for creating the Secretbox transformer.
 	Keys []Key `json:"keys"`
@@ -69,3 +72,18 @@ type Key struct {
 
 // IdentityConfig is an empty struct to allow identity transformer in provider configuration.
 type IdentityConfig struct{}
+
+// CloudProvidedKMSConfig contains the configuration for an envelope transformer which uses
+// the KMS provided by the host cloud as the root of trust.
+type CloudProvidedKMSConfig struct {
+	// kind is the name of the cloudkms Service provider to be used.
+	Kind string `json:"kind,omitempty"`
+	// apiVersion is the API version this block has to be parsed as.
+	APIVersion string `json:"apiVersion"`
+	// cacheSize is the maximum number of secrets which are cached in memory. The default value is 1000.
+	// +optional
+	CacheSize int `json:"cacheSize,omitempty"`
+	// name is the name of the KMS service to be used, helpful for clouds which may provide
+	// multiple KMS services.
+	Name string `json:"name,omitempty"`
+}
