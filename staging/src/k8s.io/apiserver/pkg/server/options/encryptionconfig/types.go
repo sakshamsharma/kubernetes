@@ -16,8 +16,8 @@ limitations under the License.
 
 package encryptionconfig
 
-// EncryptionConfig stores the complete configuration for encryption providers.
-type EncryptionConfig struct {
+// Config stores the complete configuration for encryption providers.
+type Config struct {
 	// kind is the type of configuration file.
 	Kind string `json:"kind"`
 	// apiVersion is the API version this file has to be parsed as.
@@ -58,7 +58,7 @@ type AESConfig struct {
 	Keys []Key `json:"keys"`
 }
 
-// SECRETBOXConfig contains the API configuration for an Secretbox transformer.
+// SecretboxConfig contains the API configuration for an Secretbox transformer.
 type SecretboxConfig struct {
 	// keys is a list of keys to be used for creating the Secretbox transformer.
 	Keys []Key `json:"keys"`
