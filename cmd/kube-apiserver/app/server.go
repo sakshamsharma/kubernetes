@@ -583,7 +583,8 @@ func BuildStorageFactory(s *options.ServerRunOptions) (*serverstorage.DefaultSto
 		storageFactory.SetEtcdLocation(groupResource, servers)
 	}
 
-	if s.Etcd.EncryptionProviderConfigFilepath != "" {
+	// Set up encryption at rest via transformer overrides if a configuration file was provided.
+	if len(s.Etcd.EncryptionProviderConfigFilepath) != 0 {
 		transformerOverrides, err := encryptionconfig.GetTransformerOverrides(s.Etcd.EncryptionProviderConfigFilepath)
 		if err != nil {
 			return nil, err

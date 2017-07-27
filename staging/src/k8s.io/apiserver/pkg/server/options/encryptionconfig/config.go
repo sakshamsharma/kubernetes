@@ -44,16 +44,16 @@ const (
 )
 
 // GetTransformerOverrides returns the transformer overrides by reading and parsing the encryption provider configuration file
-func GetTransformerOverrides(filepath string) (map[schema.GroupResource]value.Transformer, error) {
-	f, err := os.Open(filepath)
+func GetTransformerOverrides(encryptionConfigFilePath string) (map[schema.GroupResource]value.Transformer, error) {
+	f, err := os.Open(encryptionConfigFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("error opening encryption provider configuration file %q: %v", filepath, err)
+		return nil, fmt.Errorf("error opening encryption provider configuration file %q: %v", encryptionConfigFilePath, err)
 	}
 	defer f.Close()
 
 	result, err := ParseEncryptionConfiguration(f)
 	if err != nil {
-		return nil, fmt.Errorf("error while parsing encryption provider configuration file %q: %v", filepath, err)
+		return nil, fmt.Errorf("error while parsing encryption provider configuration file %q: %v", encryptionConfigFilePath, err)
 	}
 	return result, nil
 }
@@ -106,6 +106,7 @@ func ParseEncryptionConfiguration(f io.Reader) (map[schema.GroupResource]value.T
 // GetPrefixTransformers constructs and returns the appropriate prefix transformers for the passed resource using its configuration
 func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, error) {
 	var result []value.PrefixTransformer
+	multipleProviderError := fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
 	for _, provider := range config.Providers {
 		found := false
 
@@ -122,7 +123,7 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 
 		if provider.AESCBC != nil {
 			if found == true {
-				return result, fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
+				return result, multipleProviderError
 			}
 			transformer, err = GetAESPrefixTransformer(provider.AESCBC, aestransformer.NewCBCTransformer, aesCBCTransformerPrefixV1)
 			found = true
@@ -130,7 +131,7 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 
 		if provider.Secretbox != nil {
 			if found == true {
-				return result, fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
+				return result, multipleProviderError
 			}
 			transformer, err = GetSecretboxPrefixTransformer(provider.Secretbox)
 			found = true
@@ -138,7 +139,7 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 
 		if provider.Identity != nil {
 			if found == true {
-				return result, fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
+				return result, multipleProviderError
 			}
 			transformer = value.PrefixTransformer{
 				Transformer: identity.NewEncryptCheckTransformer(),
@@ -149,7 +150,7 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 
 		if provider.KMS != nil {
 			if found == true {
-				return nil, fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
+				return nil, multipleProviderError
 			}
 			f, err := os.Open(provider.KMS.ConfigFile)
 			if err != nil {
@@ -169,7 +170,7 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 
 		if provider.CloudProvidedKMS != nil {
 			if found == true {
-				return nil, fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
+				return nil, multipleProviderError
 			}
 			envelopeService, err := KMSPluginRegistry.getCloudProvidedPlugin(provider.CloudProvidedKMS.Name)
 			if err != nil {
