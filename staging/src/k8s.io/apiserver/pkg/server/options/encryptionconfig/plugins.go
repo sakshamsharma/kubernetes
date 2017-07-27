@@ -18,6 +18,7 @@ package encryptionconfig
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"reflect"
@@ -110,6 +111,9 @@ func (ps *KMSPlugins) fetchPluginFromRegistry(name string) (Factory, bool) {
 
 // getCloudProvidedPlugin creates an instance of the named cloud provided KMS plugin.
 func (ps *KMSPlugins) getCloudProvidedPlugin(name string) (envelope.Service, error) {
+	if ps.cloudKMS == nil {
+		return nil, fmt.Errorf("no cloud registered for KMS plugins")
+	}
 	return ps.cloudKMS(name)
 }
 
