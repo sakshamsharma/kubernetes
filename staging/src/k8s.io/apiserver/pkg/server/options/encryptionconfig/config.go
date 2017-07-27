@@ -44,16 +44,16 @@ const (
 )
 
 // GetTransformerOverrides returns the transformer overrides by reading and parsing the encryption provider configuration file
-func GetTransformerOverrides(filepath string) (map[schema.GroupResource]value.Transformer, error) {
-	f, err := os.Open(filepath)
+func GetTransformerOverrides(encryptionConfigFilePath string) (map[schema.GroupResource]value.Transformer, error) {
+	f, err := os.Open(encryptionConfigFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("error opening encryption provider configuration file %q: %v", filepath, err)
+		return nil, fmt.Errorf("error opening encryption provider configuration file %q: %v", encryptionConfigFilePath, err)
 	}
 	defer f.Close()
 
 	result, err := ParseEncryptionConfiguration(f)
 	if err != nil {
-		return nil, fmt.Errorf("error while parsing encryption provider configuration file %q: %v", filepath, err)
+		return nil, fmt.Errorf("error while parsing encryption provider configuration file %q: %v", encryptionConfigFilePath, err)
 	}
 	return result, nil
 }
@@ -65,7 +65,7 @@ func ParseEncryptionConfiguration(f io.Reader) (map[schema.GroupResource]value.T
 		return nil, fmt.Errorf("could not read contents: %v", err)
 	}
 
-	var config EncryptionConfig
+	var config Config
 	err = yaml.Unmarshal(configFileContents, &config)
 	if err != nil {
 		return nil, fmt.Errorf("error while parsing file: %v", err)
@@ -106,6 +106,7 @@ func ParseEncryptionConfiguration(f io.Reader) (map[schema.GroupResource]value.T
 // GetPrefixTransformers constructs and returns the appropriate prefix transformers for the passed resource using its configuration
 func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, error) {
 	var result []value.PrefixTransformer
+	multipleProviderError := fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
 	for _, provider := range config.Providers {
 		found := false
 
@@ -113,7 +114,7 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 		var err error
 
 		if provider.AESGCM != nil {
-			transformer, err = GetAESPrefixTransformer(provider.AESGCM, aestransformer.NewGCMTransformer, aesGCMTransformerPrefixV1)
+			transformer, err = getAESPrefixTransformer(provider.AESGCM, aestransformer.NewGCMTransformer, aesGCMTransformerPrefixV1)
 			if err != nil {
 				return result, err
 			}
@@ -122,23 +123,23 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 
 		if provider.AESCBC != nil {
 			if found == true {
-				return result, fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
+				return result, multipleProviderError
 			}
-			transformer, err = GetAESPrefixTransformer(provider.AESCBC, aestransformer.NewCBCTransformer, aesCBCTransformerPrefixV1)
+			transformer, err = getAESPrefixTransformer(provider.AESCBC, aestransformer.NewCBCTransformer, aesCBCTransformerPrefixV1)
 			found = true
 		}
 
 		if provider.Secretbox != nil {
 			if found == true {
-				return result, fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
+				return result, multipleProviderError
 			}
-			transformer, err = GetSecretboxPrefixTransformer(provider.Secretbox)
+			transformer, err = getSecretboxPrefixTransformer(provider.Secretbox)
 			found = true
 		}
 
 		if provider.Identity != nil {
 			if found == true {
-				return result, fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
+				return result, multipleProviderError
 			}
 			transformer = value.PrefixTransformer{
 				Transformer: identity.NewEncryptCheckTransformer(),
@@ -149,7 +150,7 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 
 		if provider.KMS != nil {
 			if found == true {
-				return nil, fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
+				return nil, multipleProviderError
 			}
 			f, err := os.Open(provider.KMS.ConfigFile)
 			if err != nil {
@@ -169,7 +170,7 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 
 		if provider.CloudProvidedKMS != nil {
 			if found == true {
-				return nil, fmt.Errorf("more than one provider specified in a single element, should split into different list elements")
+				return nil, multipleProviderError
 			}
 			envelopeService, err := KMSPluginRegistry.getCloudProvidedPlugin(provider.CloudProvidedKMS.Name)
 			if err != nil {
@@ -191,12 +192,12 @@ func GetPrefixTransformers(config *ResourceConfig) ([]value.PrefixTransformer, e
 	return result, nil
 }
 
-// BlockTransformerFunc takes an AES cipher block and returns a value transformer.
-type BlockTransformerFunc func(cipher.Block) value.Transformer
+// blockTransformerFunc taske an AES cipher block and returns a value transformer.
+type blockTransformerFunc func(cipher.Block) value.Transformer
 
-// GetAESPrefixTransformer returns a prefix transformer from the provided configuration.
+// getAESPrefixTransformer returns a prefix transformer from the provided configuration.
 // Returns an AES transformer based on the provided prefix and block transformer.
-func GetAESPrefixTransformer(config *AESConfig, fn BlockTransformerFunc, prefix string) (value.PrefixTransformer, error) {
+func getAESPrefixTransformer(config *AESConfig, fn blockTransformerFunc, prefix string) (value.PrefixTransformer, error) {
 	var result value.PrefixTransformer
 
 	if len(config.Keys) == 0 {
@@ -243,8 +244,8 @@ func GetAESPrefixTransformer(config *AESConfig, fn BlockTransformerFunc, prefix 
 	return result, nil
 }
 
-// GetSecretboxPrefixTransformer returns a prefix transformer from the provided configuration
-func GetSecretboxPrefixTransformer(config *SecretboxConfig) (value.PrefixTransformer, error) {
+// getSecretboxPrefixTransformer returns a prefix transformer from the provided configuration
+func getSecretboxPrefixTransformer(config *SecretboxConfig) (value.PrefixTransformer, error) {
 	var result value.PrefixTransformer
 
 	if len(config.Keys) == 0 {
