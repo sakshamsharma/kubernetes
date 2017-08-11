@@ -27,9 +27,10 @@ import (
 )
 
 const (
-	KMSServiceName = "google-cloudkms"
+	// KMSServiceName is the name of the cloudkms provider registered by this cloud.
+	KMSServiceName = "gcp-cloudkms"
 
-	defaultGKMSKeyRing = "google-kubernetes"
+	defaultGKMSKeyRing = "google-container-engine"
 )
 
 // gkmsConfig contains the GCE specific KMS configuration for setting up a KMS connection.
@@ -53,12 +54,12 @@ type gkmsService struct {
 	cloudkmsService *cloudkms.Service
 }
 
-// KeyManagementService returns a named key management service supported by the cloud.
+// KeyManagementService provides a named key management service supported by the cloud.
 func (gce *GCECloud) KeyManagementService(name string) (cloudprovider.KeyManagementService, error) {
-	if name != KMSServiceName {
-		return nil, fmt.Errorf("cloud %q does not support KeyManagementService %q", gce.ProviderName(), name)
-	}
+	return nil, fmt.Errorf("cloud %q does not support KeyManagementService %q", gce.ProviderName(), name)
+}
 
+func (gce *GCECloud) getGCPCloudKMSService() (cloudprovider.KeyManagementService, error) {
 	if gce.kmsConfig == nil {
 		return nil, fmt.Errorf("kmsConfig not provided in GCE cloud configuration")
 	}
